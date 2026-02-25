@@ -90,6 +90,13 @@ type ScopeContext = { org?: string; project?: string; environment?: string };
 
 function parsePathContext(path: string): ScopeContext {
   const parts = path.split('/').filter(Boolean);
+  if (parts.length >= 6 && parts[3] === '-' && parts[4] === 'app') {
+    return {
+      org: parts[0],
+      project: parts[1],
+      environment: parts[2]
+    };
+  }
   if (parts.length < 3) return {};
   const end = parts.length - 3;
   return {
