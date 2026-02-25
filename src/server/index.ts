@@ -45,6 +45,9 @@ export function buildServer() {
 
   app.get('/healthz', async () => ({ ok: true }));
   app.get('/manifest.json', async (req, reply) => {
+    reply.header('access-control-allow-origin', '*');
+    reply.header('access-control-allow-methods', 'GET, OPTIONS');
+    reply.header('access-control-allow-headers', 'content-type');
     try {
       const mountedPath = join(process.cwd(), 'plugins/manifest.json');
       await access(mountedPath);
@@ -57,6 +60,12 @@ export function buildServer() {
       reply.type('application/json; charset=utf-8');
       return content;
     }
+  });
+  app.options('/manifest.json', async (_req, reply) => {
+    reply.header('access-control-allow-origin', '*');
+    reply.header('access-control-allow-methods', 'GET, OPTIONS');
+    reply.header('access-control-allow-headers', 'content-type');
+    reply.code(204).send();
   });
 
   app.register(async (api) => {
