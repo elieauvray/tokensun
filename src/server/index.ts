@@ -90,7 +90,7 @@ async function start() {
   }
 
   const app = buildServer();
-  const port = Number(process.env.PORT ?? 8080);
+  const port = Number(process.env.PORT ?? 8888);
   await app.listen({ port, host: '0.0.0.0' });
 }
 
