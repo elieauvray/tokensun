@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 const bootstrapSchema = z.object({
   upsunApiToken: z.string().min(20),
-  upsunOrgId: z.string().min(1),
+  upsunOrgId: z.string().optional(),
   upsunProjectId: z.string().min(1)
 });
 
@@ -15,7 +15,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       ...req.session,
       workspace: {
         upsunApiToken: body.upsunApiToken,
-        upsunOrgId: body.upsunOrgId,
+        upsunOrgId: body.upsunOrgId ?? 'unknown',
         upsunProjectId: body.upsunProjectId
       },
       connections: req.session.connections ?? [],
@@ -26,7 +26,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     return {
       ok: true,
       workspace: {
-        upsunOrgId: body.upsunOrgId,
+        upsunOrgId: body.upsunOrgId ?? 'unknown',
         upsunProjectId: body.upsunProjectId
       }
     };

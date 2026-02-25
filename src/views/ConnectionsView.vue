@@ -16,6 +16,16 @@
           <span>/</span>
           <span>{{ detectedEnvironmentId || 'missing-environment' }}</span>
         </div>
+        <InputText
+          v-if="!bootstrap.upsunOrgId"
+          v-model="bootstrap.upsunOrgId"
+          placeholder="Organization ID (fallback)"
+        />
+        <InputText
+          v-if="!bootstrap.upsunProjectId"
+          v-model="bootstrap.upsunProjectId"
+          placeholder="Project ID (fallback)"
+        />
       </div>
     </article>
 
@@ -76,26 +86,82 @@ type Provider = 'openai' | 'anthropic' | 'gemini' | 'mistral';
 const providers: Provider[] = ['openai', 'anthropic', 'gemini', 'mistral'];
 const route = useRoute();
 
-function detectContextFromPathname(pathname: string): { org?: string; project?: string; environment?: string } {
-  const parts = pathname.split('/').filter(Boolean);
-  if (parts.length >= 3) {
-    return {
-      org: parts[0],
-      project: parts[1],
-      environment: parts[2]
-    };
+type ScopeContext = { org?: string; project?: string; environment?: string };
+
+function parsePathContext(path: string): ScopeContext {
+  const parts = path.split('/').filter(Boolean);
+  if (parts.length < 3) return {};
+  const end = parts.length - 3;
+  return {
+    org: parts[end],
+    project: parts[end + 1],
+    environment: parts[end + 2]
+  };
+}
+
+function parseSearchContext(searchOrHash: string): ScopeContext {
+  const payload = searchOrHash.startsWith('?') ? searchOrHash.slice(1) : searchOrHash;
+  const query = new URLSearchParams(payload);
+  const org = query.get('organizationId') ?? query.get('orgId') ?? query.get('organization') ?? undefined;
+  const project = query.get('projectId') ?? query.get('project') ?? undefined;
+  const environment = query.get('environmentId') ?? query.get('environment') ?? undefined;
+  return { org: org ?? undefined, project: project ?? undefined, environment: environment ?? undefined };
+}
+
+function detectContext(): ScopeContext {
+  const fromRouteQuery = {
+    org: String(route.query.organizationId ?? ''),
+    project: String(route.query.projectId ?? ''),
+    environment: String(route.query.environmentId ?? '')
+  };
+  if (fromRouteQuery.org || fromRouteQuery.project || fromRouteQuery.environment) {
+    return fromRouteQuery;
+  }
+
+  const fromPath = parsePathContext(window.location.pathname);
+  if (fromPath.org || fromPath.project || fromPath.environment) {
+    return fromPath;
+  }
+
+  const fromSearch = parseSearchContext(window.location.search);
+  if (fromSearch.org || fromSearch.project || fromSearch.environment) {
+    return fromSearch;
+  }
+
+  const hashQuery = window.location.hash.includes('?') ? window.location.hash.split('?')[1] : '';
+  if (hashQuery) {
+    const fromHash = parseSearchContext(hashQuery);
+    if (fromHash.org || fromHash.project || fromHash.environment) {
+      return fromHash;
+    }
+  }
+
+  if (document.referrer) {
+    try {
+      const ref = new URL(document.referrer);
+      const fromRefPath = parsePathContext(ref.pathname);
+      if (fromRefPath.org || fromRefPath.project || fromRefPath.environment) {
+        return fromRefPath;
+      }
+      const fromRefSearch = parseSearchContext(ref.search);
+      if (fromRefSearch.org || fromRefSearch.project || fromRefSearch.environment) {
+        return fromRefSearch;
+      }
+    } catch {
+      // ignore malformed referrer
+    }
   }
   return {};
 }
 
-const fallback = detectContextFromPathname(window.location.pathname);
+const detected = detectContext();
 
 const bootstrap = reactive({
   upsunApiToken: '',
-  upsunOrgId: String(route.query.organizationId ?? fallback.org ?? ''),
-  upsunProjectId: String(route.query.projectId ?? fallback.project ?? '')
+  upsunOrgId: detected.org ?? '',
+  upsunProjectId: detected.project ?? ''
 });
-const detectedEnvironmentId = ref(String(route.query.environmentId ?? fallback.environment ?? ''));
+const detectedEnvironmentId = ref(detected.environment ?? '');
 
 const form = reactive({
   provider: 'openai' as Provider,
@@ -123,8 +189,8 @@ async function doBootstrap() {
     message.value = 'Upsun API token is required.';
     return;
   }
-  if (!bootstrap.upsunOrgId || !bootstrap.upsunProjectId) {
-    message.value = 'Could not detect organization/project from plugin route.';
+  if (!bootstrap.upsunProjectId) {
+    message.value = 'Could not detect project. Fill Project ID fallback field once.';
     return;
   }
   bootstrapping.value = true;
