@@ -189,10 +189,6 @@ async function doBootstrap() {
     message.value = 'Upsun API token is required.';
     return;
   }
-  if (!bootstrap.upsunProjectId) {
-    message.value = 'Could not detect project. Fill Project ID fallback field once.';
-    return;
-  }
   bootstrapping.value = true;
   try {
     await api('/api/auth/bootstrap', {
