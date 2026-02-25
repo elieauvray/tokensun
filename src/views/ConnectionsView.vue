@@ -191,10 +191,15 @@ async function doBootstrap() {
   }
   bootstrapping.value = true;
   try {
-    await api('/api/auth/bootstrap', {
+    const res = await api<{ ok: boolean; workspace: { upsunOrgId: string; upsunProjectId: string } }>('/api/auth/bootstrap', {
       method: 'POST',
       body: JSON.stringify(bootstrap)
     });
+    bootstrap.upsunOrgId = res.workspace.upsunOrgId;
+    bootstrap.upsunProjectId = res.workspace.upsunProjectId;
+    if (!detectedEnvironmentId.value) {
+      detectedEnvironmentId.value = 'current';
+    }
     message.value = 'Workspace bootstrapped';
     await loadConnections();
   } catch (err) {
