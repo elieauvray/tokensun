@@ -1,6 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { requireWorkspace } from '../middleware/requireWorkspace.js';
 import { fetchOpenAIUsage } from '../services/providers/openai.js';
 import { fetchAnthropicUsage } from '../services/providers/anthropic.js';
 import { fetchGeminiUsage } from '../services/providers/gemini.js';
@@ -41,7 +40,7 @@ async function loadPoints(connection: ConnectionRecord, start: string, end: stri
 }
 
 const usageRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.post('/usage/refresh', { preHandler: requireWorkspace }, async (req, reply) => {
+  fastify.post('/usage/refresh', async (req, reply) => {
     const body = refreshSchema.parse(req.body);
 
     const selected = body.connectionId
@@ -79,7 +78,7 @@ const usageRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, rowsAdded: incoming.length };
   });
 
-  fastify.get('/usage/query', { preHandler: requireWorkspace }, async (req) => {
+  fastify.get('/usage/query', async (req) => {
     const filters = querySchema.parse(req.query);
 
     return {

@@ -36,10 +36,11 @@ const sessionPlugin: FastifyPluginAsync = async (fastify) => {
 
   fastify.decorateReply('commitSession', function commitSession(nextSession: SessionState) {
     const encoded = encodeEnvelope(encryptJson(nextSession));
+    const isProd = process.env.NODE_ENV === 'production';
     this.setCookie(COOKIE_NAME, encoded, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       path: '/',
       maxAge: 60 * 60 * 24 * 7
     });

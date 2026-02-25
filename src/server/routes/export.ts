@@ -1,6 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { requireWorkspace } from '../middleware/requireWorkspace.js';
 import { queryUsage } from '../services/usageAggregator.js';
 
 const querySchema = z.object({
@@ -13,7 +12,7 @@ const querySchema = z.object({
 });
 
 const exportRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/export.csv', { preHandler: requireWorkspace }, async (req, reply) => {
+  fastify.get('/export.csv', async (req, reply) => {
     const filters = querySchema.parse(req.query);
     const rows = queryUsage(req.session.usage, filters);
 

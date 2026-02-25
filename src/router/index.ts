@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import ConnectionsView from '../views/ConnectionsView.vue';
+import DashboardView from '../views/DashboardView.vue';
 
 export default createRouter({
   history: createWebHistory(),
@@ -18,6 +19,6 @@ export default createRouter({
     },
     { path: '/connections', component: ConnectionsView },
     { path: '/provision', redirect: '/connections' },
-    { path: '/dashboard', redirect: '/connections' }
+    { path: '/dashboard', component: DashboardView }
   ]
 });
