@@ -7,6 +7,17 @@ export default createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', redirect: '/connections' },
+    {
+      path: '/:organizationId/:projectId/:environmentId/',
+      redirect: (to) => ({
+        path: '/connections',
+        query: {
+          organizationId: String(to.params.organizationId ?? ''),
+          projectId: String(to.params.projectId ?? ''),
+          environmentId: String(to.params.environmentId ?? '')
+        }
+      })
+    },
     { path: '/connections', component: ConnectionsView },
     { path: '/provision', component: ProvisionView },
     { path: '/dashboard', component: DashboardView }

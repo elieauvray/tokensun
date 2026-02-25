@@ -3,13 +3,19 @@
     <article class="console-panel">
       <header class="console-panel-header">
         <h2 class="console-panel-title">Workspace bootstrap</h2>
-        <p class="console-panel-subtitle">Provide Upsun scope for provisioning and refresh actions.</p>
+        <p class="console-panel-subtitle">Upsun scope is auto-detected from plugin context. Enter API token once per session.</p>
       </header>
-      <div class="console-panel-body console-grid-4">
+      <div class="console-panel-body console-grid-3">
         <InputText v-model="bootstrap.upsunApiToken" type="password" placeholder="Upsun API token" />
-        <InputText v-model="bootstrap.upsunOrgId" placeholder="Organization ID" />
-        <InputText v-model="bootstrap.upsunProjectId" placeholder="Project ID" />
         <Button label="Bootstrap" @click="doBootstrap" />
+        <div class="context">
+          <strong>Detected scope:</strong>
+          <span>{{ bootstrap.upsunOrgId || 'missing-org' }}</span>
+          <span>/</span>
+          <span>{{ bootstrap.upsunProjectId || 'missing-project' }}</span>
+          <span>/</span>
+          <span>{{ detectedEnvironmentId || 'missing-environment' }}</span>
+        </div>
       </div>
     </article>
 
@@ -57,6 +63,7 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Dropdown from 'primevue/dropdown';
@@ -67,12 +74,28 @@ import { api } from '../components/api';
 type Provider = 'openai' | 'anthropic' | 'gemini' | 'mistral';
 
 const providers: Provider[] = ['openai', 'anthropic', 'gemini', 'mistral'];
+const route = useRoute();
+
+function detectContextFromPathname(pathname: string): { org?: string; project?: string; environment?: string } {
+  const parts = pathname.split('/').filter(Boolean);
+  if (parts.length >= 3) {
+    return {
+      org: parts[0],
+      project: parts[1],
+      environment: parts[2]
+    };
+  }
+  return {};
+}
+
+const fallback = detectContextFromPathname(window.location.pathname);
 
 const bootstrap = reactive({
   upsunApiToken: '',
-  upsunOrgId: '',
-  upsunProjectId: ''
+  upsunOrgId: String(route.query.organizationId ?? fallback.org ?? ''),
+  upsunProjectId: String(route.query.projectId ?? fallback.project ?? '')
 });
+const detectedEnvironmentId = ref(String(route.query.environmentId ?? fallback.environment ?? ''));
 
 const form = reactive({
   provider: 'openai' as Provider,
@@ -91,6 +114,10 @@ async function loadConnections() {
 }
 
 async function doBootstrap() {
+  if (!bootstrap.upsunOrgId || !bootstrap.upsunProjectId) {
+    message.value = 'Could not detect organization/project from plugin route.';
+    return;
+  }
   await api('/api/auth/bootstrap', {
     method: 'POST',
     body: JSON.stringify(bootstrap)
@@ -145,6 +172,13 @@ onMounted(loadConnections);
 <style scoped>
 .span-3 {
   grid-column: span 3;
+}
+.context {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+  color: #475569;
 }
 
 @media (max-width: 980px) {
