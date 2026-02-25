@@ -23,5 +23,5 @@ applications:
         set -e
         mkdir -p plugins
         cp manifest.json plugins/manifest.json
-        ROUTE=$(node -e 'const routes=JSON.parse(process.env.PLATFORM_ROUTES||"{}");const first=Object.keys(routes)[0]||"http://localhost:8080";process.stdout.write(first.replace(/\/$/,""));')
+        ROUTE=$(node -e 'const raw=process.env.PLATFORM_ROUTES||"{}";let decoded=raw;try{if(!raw.trim().startsWith("{"))decoded=Buffer.from(raw,"base64").toString("utf8")}catch{};let routes={};try{routes=JSON.parse(decoded)}catch{};const keys=Object.keys(routes);const upstream=keys.find((k)=>routes[k]&&routes[k].type==="upstream")||keys[0]||"http://localhost:8080";process.stdout.write(upstream.replace(/\/$/,""));')
         node -e 'const fs=require("fs");const p="plugins/manifest.json";const r=process.argv[1];const next=fs.readFileSync(p,"utf8").replace(/http:\/\/localhost:8080/g,r);fs.writeFileSync(p,next);' "$ROUTE"
