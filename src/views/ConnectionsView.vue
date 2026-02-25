@@ -7,7 +7,7 @@
       </header>
       <div class="console-panel-body console-grid-3">
         <InputText v-model="bootstrap.upsunApiToken" type="password" placeholder="Upsun API token" />
-        <Button label="Bootstrap" @click="doBootstrap" />
+        <Button :loading="bootstrapping" label="Submit" @click="doBootstrap" />
         <div class="context">
           <strong>Detected scope:</strong>
           <span>{{ bootstrap.upsunOrgId || 'missing-org' }}</span>
@@ -106,24 +106,40 @@ const form = reactive({
 });
 
 const message = ref('');
+const bootstrapping = ref(false);
 const connections = ref<any[]>([]);
 
 async function loadConnections() {
-  const res = await api<{ connections: any[] }>('/api/connections');
-  connections.value = res.connections;
+  try {
+    const res = await api<{ connections: any[] }>('/api/connections');
+    connections.value = res.connections;
+  } catch {
+    // Ignore initial unauthorized load until bootstrap is done.
+  }
 }
 
 async function doBootstrap() {
+  if (!bootstrap.upsunApiToken) {
+    message.value = 'Upsun API token is required.';
+    return;
+  }
   if (!bootstrap.upsunOrgId || !bootstrap.upsunProjectId) {
     message.value = 'Could not detect organization/project from plugin route.';
     return;
   }
-  await api('/api/auth/bootstrap', {
-    method: 'POST',
-    body: JSON.stringify(bootstrap)
-  });
-  message.value = 'Workspace bootstrapped';
-  await loadConnections();
+  bootstrapping.value = true;
+  try {
+    await api('/api/auth/bootstrap', {
+      method: 'POST',
+      body: JSON.stringify(bootstrap)
+    });
+    message.value = 'Workspace bootstrapped';
+    await loadConnections();
+  } catch (err) {
+    message.value = err instanceof Error ? `Bootstrap failed: ${err.message}` : 'Bootstrap failed';
+  } finally {
+    bootstrapping.value = false;
+  }
 }
 
 async function createConnection() {
