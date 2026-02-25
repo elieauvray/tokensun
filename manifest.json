@@ -1,0 +1,15 @@
+{
+  "id": "tokensun",
+  "name": "TokenSun",
+  "description": "Token usage and cost dashboard with Upsun variable provisioning.",
+  "type": "iframe",
+  "base_url": "http://localhost:3000",
+  "tabs": [
+    {
+      "id": "tokensun-tab",
+      "label": "TokenSun",
+      "hook": "environment",
+      "route": "/:organizationId/:projectId/:environmentId/"
+    }
+  ]
+}
