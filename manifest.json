@@ -1,15 +1,36 @@
 {
   "id": "tokensun",
   "name": "TokenSun",
+  "version": "1.0.0",
   "description": "Token usage and cost dashboard with Upsun variable provisioning.",
+  "author": "Upsun community",
+  "icon": "",
+  "screenshots": [],
+  "website": "https://github.com/elieauvray/tokensun",
+  "_self": "http://localhost:8080/manifest.json",
+  "url": "http://localhost:8080",
+  "format": "amd",
+  "scopes": [],
   "type": "iframe",
-  "base_url": "http://localhost:3000",
-  "tabs": [
+  "hooks": [
     {
-      "id": "tokensun-tab",
-      "label": "TokenSun",
-      "hook": "environment",
-      "route": "/:organizationId/:projectId/:environmentId/"
+      "name": "environment",
+      "route": "/:organizationId/:projectId/:environmentId/",
+      "type": "tab",
+      "title": "TokenSun"
     }
-  ]
+  ],
+  "permissions": {
+    "subscriptions": [
+      "PLUGIN_TOPIC_VIEW_LOADED"
+    ],
+    "publishers": [
+      "PLUGIN_TOPIC_VIEW_LOADED",
+      "PLUGIN_TOPIC_RESIZE_IFRAME"
+    ],
+    "clients": [
+      "PLUGIN_SRV_PROPS"
+    ],
+    "services": []
+  }
 }
