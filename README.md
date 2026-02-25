@@ -1,6 +1,6 @@
 # TokenSun
 
-TokenSun is an Upsun plugin app for tracking LLM token usage and cost across providers, then provisioning standardized `TOKENSUN_*` variables into Upsun projects/environments.
+TokenSun is an Upsun plugin app for managing LLM provider connections and credentials across providers.
 
 This repository is implemented as a **stateless plugin app**:
 - No database
@@ -14,7 +14,7 @@ This repository is implemented as a **stateless plugin app**:
   - Anthropic (Claude)
   - Gemini (API key)
   - Mistral
-- Provisioning of `TOKENSUN_*` Upsun variables with strict allowlist enforcement
+- Connection-focused plugin flow (variable provisioning UI disabled)
 - Usage + cost dashboard with timeline buckets:
   - hour
   - week

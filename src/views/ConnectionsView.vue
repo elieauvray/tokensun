@@ -2,37 +2,21 @@
   <section class="console-section">
     <article class="console-panel">
       <header class="console-panel-header">
-        <h2 class="console-panel-title">Workspace bootstrap</h2>
-        <p class="console-panel-subtitle">Upsun scope is auto-detected from plugin context. Enter API token once per session.</p>
+        <h2 class="console-panel-title">Security notice</h2>
       </header>
-      <div class="console-panel-body console-grid-3">
-        <InputText v-model="bootstrap.upsunApiToken" type="password" placeholder="Upsun API token" />
-        <Button :loading="bootstrapping" label="Submit" @click="doBootstrap" />
-        <div class="context">
-          <strong>Detected scope:</strong>
-          <span>{{ bootstrap.upsunOrgId || 'missing-org' }}</span>
-          <span>/</span>
-          <span>{{ bootstrap.upsunProjectId || 'missing-project' }}</span>
-          <span>/</span>
-          <span>{{ detectedEnvironmentId || 'missing-environment' }}</span>
-        </div>
-        <InputText
-          v-if="!bootstrap.upsunOrgId"
-          v-model="bootstrap.upsunOrgId"
-          placeholder="Organization ID (fallback)"
-        />
-        <InputText
-          v-if="!bootstrap.upsunProjectId"
-          v-model="bootstrap.upsunProjectId"
-          placeholder="Project ID (fallback)"
-        />
+      <div class="console-panel-body">
+        <p class="security-note">
+          Your LLM credentials are stored securely within your browser and solely transmitted to the tokensun server hosted on Upsun.
+          This method enhances security by ensuring that your credentials are not shared with any third parties, thereby reducing the risk of unauthorized access.
+          Please note that if you access Upsun from a different browser or device, you will be required to re-enter your llm key.
+        </p>
       </div>
     </article>
 
     <article class="console-panel">
       <header class="console-panel-header">
         <h2 class="console-panel-title">Provider connections</h2>
-        <p class="console-panel-subtitle">Store provider credentials (encrypted in session cookie) and test reachability.</p>
+        <p class="console-panel-subtitle">Create and manage multiple LLM provider connections.</p>
       </header>
       <div class="console-panel-body console-grid-4">
         <Dropdown v-model="form.provider" :options="providers" placeholder="Provider" />
@@ -73,7 +57,6 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
-import { useRoute } from 'vue-router';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Dropdown from 'primevue/dropdown';
@@ -84,91 +67,6 @@ import { api } from '../components/api';
 type Provider = 'openai' | 'anthropic' | 'gemini' | 'mistral';
 
 const providers: Provider[] = ['openai', 'anthropic', 'gemini', 'mistral'];
-const route = useRoute();
-
-type ScopeContext = { org?: string; project?: string; environment?: string };
-
-function parsePathContext(path: string): ScopeContext {
-  const parts = path.split('/').filter(Boolean);
-  if (parts.length >= 6 && parts[3] === '-' && parts[4] === 'app') {
-    return {
-      org: parts[0],
-      project: parts[1],
-      environment: parts[2]
-    };
-  }
-  if (parts.length < 3) return {};
-  const end = parts.length - 3;
-  return {
-    org: parts[end],
-    project: parts[end + 1],
-    environment: parts[end + 2]
-  };
-}
-
-function parseSearchContext(searchOrHash: string): ScopeContext {
-  const payload = searchOrHash.startsWith('?') ? searchOrHash.slice(1) : searchOrHash;
-  const query = new URLSearchParams(payload);
-  const org = query.get('organizationId') ?? query.get('orgId') ?? query.get('organization') ?? undefined;
-  const project = query.get('projectId') ?? query.get('project') ?? undefined;
-  const environment = query.get('environmentId') ?? query.get('environment') ?? undefined;
-  return { org: org ?? undefined, project: project ?? undefined, environment: environment ?? undefined };
-}
-
-function detectContext(): ScopeContext {
-  const fromRouteQuery = {
-    org: String(route.query.organizationId ?? ''),
-    project: String(route.query.projectId ?? ''),
-    environment: String(route.query.environmentId ?? '')
-  };
-  if (fromRouteQuery.org || fromRouteQuery.project || fromRouteQuery.environment) {
-    return fromRouteQuery;
-  }
-
-  const fromPath = parsePathContext(window.location.pathname);
-  if (fromPath.org || fromPath.project || fromPath.environment) {
-    return fromPath;
-  }
-
-  const fromSearch = parseSearchContext(window.location.search);
-  if (fromSearch.org || fromSearch.project || fromSearch.environment) {
-    return fromSearch;
-  }
-
-  const hashQuery = window.location.hash.includes('?') ? window.location.hash.split('?')[1] : '';
-  if (hashQuery) {
-    const fromHash = parseSearchContext(hashQuery);
-    if (fromHash.org || fromHash.project || fromHash.environment) {
-      return fromHash;
-    }
-  }
-
-  if (document.referrer) {
-    try {
-      const ref = new URL(document.referrer);
-      const fromRefPath = parsePathContext(ref.pathname);
-      if (fromRefPath.org || fromRefPath.project || fromRefPath.environment) {
-        return fromRefPath;
-      }
-      const fromRefSearch = parseSearchContext(ref.search);
-      if (fromRefSearch.org || fromRefSearch.project || fromRefSearch.environment) {
-        return fromRefSearch;
-      }
-    } catch {
-      // ignore malformed referrer
-    }
-  }
-  return {};
-}
-
-const detected = detectContext();
-
-const bootstrap = reactive({
-  upsunApiToken: '',
-  upsunOrgId: detected.org ?? '',
-  upsunProjectId: detected.project ?? ''
-});
-const detectedEnvironmentId = ref(detected.environment ?? '');
 
 const form = reactive({
   provider: 'openai' as Provider,
@@ -179,41 +77,11 @@ const form = reactive({
 });
 
 const message = ref('');
-const bootstrapping = ref(false);
 const connections = ref<any[]>([]);
 
 async function loadConnections() {
-  try {
-    const res = await api<{ connections: any[] }>('/api/connections');
-    connections.value = res.connections;
-  } catch {
-    // Ignore initial unauthorized load until bootstrap is done.
-  }
-}
-
-async function doBootstrap() {
-  if (!bootstrap.upsunApiToken) {
-    message.value = 'Upsun API token is required.';
-    return;
-  }
-  bootstrapping.value = true;
-  try {
-    const res = await api<{ ok: boolean; workspace: { upsunOrgId: string; upsunProjectId: string } }>('/api/auth/bootstrap', {
-      method: 'POST',
-      body: JSON.stringify(bootstrap)
-    });
-    bootstrap.upsunOrgId = res.workspace.upsunOrgId;
-    bootstrap.upsunProjectId = res.workspace.upsunProjectId;
-    if (!detectedEnvironmentId.value) {
-      detectedEnvironmentId.value = 'current';
-    }
-    message.value = 'Workspace bootstrapped';
-    await loadConnections();
-  } catch (err) {
-    message.value = err instanceof Error ? `Bootstrap failed: ${err.message}` : 'Bootstrap failed';
-  } finally {
-    bootstrapping.value = false;
-  }
+  const res = await api<{ connections: any[] }>('/api/connections');
+  connections.value = res.connections;
 }
 
 async function createConnection() {
@@ -263,12 +131,12 @@ onMounted(loadConnections);
 .span-3 {
   grid-column: span 3;
 }
-.context {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  font-size: 12px;
-  color: #475569;
+
+.security-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #334155;
 }
 
 @media (max-width: 980px) {

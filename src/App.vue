@@ -7,8 +7,6 @@
       </div>
       <nav class="console-nav">
         <RouterLink to="/connections">Connections</RouterLink>
-        <RouterLink to="/provision">Provision</RouterLink>
-        <RouterLink to="/dashboard">Dashboard</RouterLink>
       </nav>
     </header>
     <main class="console-main">

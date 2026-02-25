@@ -1,7 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { requireWorkspace } from '../middleware/requireWorkspace.js';
 import { testOpenAI } from '../services/providers/openai.js';
 import { testAnthropic } from '../services/providers/anthropic.js';
 import { testGemini } from '../services/providers/gemini.js';
@@ -53,13 +52,13 @@ function toPublicConnection(connection: ConnectionRecord) {
 }
 
 const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/connections', { preHandler: requireWorkspace }, async (req) => {
+  fastify.get('/connections', async (req) => {
     return {
       connections: req.session.connections.map(toPublicConnection)
     };
   });
 
-  fastify.post('/connections', { preHandler: requireWorkspace }, async (req, reply) => {
+  fastify.post('/connections', async (req, reply) => {
     const body = upsertSchema.parse(req.body);
     const now = new Date().toISOString();
 
@@ -82,7 +81,7 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
     return { connection: toPublicConnection(next) };
   });
 
-  fastify.post('/connections/:id/test', { preHandler: requireWorkspace }, async (req) => {
+  fastify.post('/connections/:id/test', async (req) => {
     const id = z.string().uuid().parse((req.params as any).id);
     const connection = req.session.connections.find((c) => c.id === id);
     if (!connection) {
@@ -93,7 +92,7 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, message: 'connection_ok' };
   });
 
-  fastify.put('/connections/:id', { preHandler: requireWorkspace }, async (req, reply) => {
+  fastify.put('/connections/:id', async (req, reply) => {
     const id = z.string().uuid().parse((req.params as any).id);
     const body = updateSchema.parse(req.body);
 
@@ -120,7 +119,7 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
     return { connection: toPublicConnection(updated) };
   });
 
-  fastify.delete('/connections/:id', { preHandler: requireWorkspace }, async (req, reply) => {
+  fastify.delete('/connections/:id', async (req, reply) => {
     const id = z.string().uuid().parse((req.params as any).id);
 
     const connections = req.session.connections.filter((c) => c.id !== id);
