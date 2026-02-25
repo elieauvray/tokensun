@@ -36,8 +36,10 @@ function getProjectIdFromRequestHost(hostHeader: string | undefined): string | u
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/auth/bootstrap', async (req, reply) => {
     const body = bootstrapSchema.parse(req.body);
+    const normalizedProjectId = body.upsunProjectId?.trim() || undefined;
+    const normalizedOrgId = body.upsunOrgId?.trim() || undefined;
     const projectId =
-      body.upsunProjectId ??
+      normalizedProjectId ??
       getRuntimeProjectId() ??
       getProjectIdFromRequestHost(req.headers.host);
     if (!projectId) {
@@ -49,7 +51,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       ...req.session,
       workspace: {
         upsunApiToken: body.upsunApiToken,
-        upsunOrgId: body.upsunOrgId ?? 'unknown',
+        upsunOrgId: normalizedOrgId ?? 'unknown',
         upsunProjectId: projectId
       },
       connections: req.session.connections ?? [],
@@ -60,7 +62,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     return {
       ok: true,
       workspace: {
-        upsunOrgId: body.upsunOrgId ?? 'unknown',
+        upsunOrgId: normalizedOrgId ?? 'unknown',
         upsunProjectId: projectId
       }
     };
