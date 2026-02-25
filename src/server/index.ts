@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { access, readFile } from 'node:fs/promises';
 import { ZodError } from 'zod';
+import { assertMasterKeyConfigured } from './crypto/envelope.js';
 import sessionPlugin from './middleware/session.js';
 import rateLimitPlugin from './middleware/rateLimit.js';
 import authRoutes from './routes/auth.js';
@@ -85,9 +86,7 @@ export function buildServer() {
 
 async function start() {
   // Fail fast if encryption is not configured.
-  if (!process.env.TOKENSUN_MASTER_KEY) {
-    throw new Error('TOKENSUN_MASTER_KEY is required');
-  }
+  assertMasterKeyConfigured();
 
   const app = buildServer();
   const port = Number(process.env.PORT ?? 8888);

@@ -9,8 +9,47 @@ type Envelope = {
   ciphertext: string;
 };
 
+function decodeMaybeBase64Json(raw: string): Record<string, unknown> {
+  let decoded = raw;
+  try {
+    if (!raw.trim().startsWith('{')) {
+      decoded = Buffer.from(raw, 'base64').toString('utf8');
+    }
+  } catch {
+    decoded = raw;
+  }
+
+  try {
+    return JSON.parse(decoded) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function getMasterKeyString(): string | undefined {
+  if (process.env.TOKENSUN_MASTER_KEY) {
+    return process.env.TOKENSUN_MASTER_KEY;
+  }
+
+  const platformVars = process.env.PLATFORM_VARIABLES;
+  if (!platformVars) return undefined;
+
+  const vars = decodeMaybeBase64Json(platformVars);
+  const fromEnvPrefix = vars['env:TOKENSUN_MASTER_KEY'];
+  if (typeof fromEnvPrefix === 'string' && fromEnvPrefix.length > 0) {
+    return fromEnvPrefix;
+  }
+
+  const fromPlain = vars.TOKENSUN_MASTER_KEY;
+  if (typeof fromPlain === 'string' && fromPlain.length > 0) {
+    return fromPlain;
+  }
+
+  return undefined;
+}
+
 function getMasterKey(): Buffer {
-  const raw = process.env.TOKENSUN_MASTER_KEY;
+  const raw = getMasterKeyString();
   if (!raw) {
     throw new Error('TOKENSUN_MASTER_KEY is required');
   }
@@ -21,6 +60,10 @@ function getMasterKey(): Buffer {
   }
 
   return key;
+}
+
+export function assertMasterKeyConfigured(): void {
+  getMasterKey();
 }
 
 export function encryptString(plain: string): Envelope {
