@@ -79,7 +79,11 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post('/connections/:id/test', async (req) => {
-    const id = z.string().uuid().parse((req.params as any).id);
+    const parsedId = z.string().uuid().safeParse((req.params as any).id);
+    if (!parsedId.success) {
+      return { ok: false, message: 'invalid_connection_id' };
+    }
+    const id = parsedId.data;
     const connection = req.session.connections.find((c) => c.id === id);
     if (!connection) {
       return { ok: false, message: 'connection_not_found' };

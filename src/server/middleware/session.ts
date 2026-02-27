@@ -1,6 +1,9 @@
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { getPool } from '../db/pool.js';
+import { hasDatabaseConfig } from '../db/pool.js';
 import { decodeStateFromStorage, encodeStateForStorage } from '../services/stateCodec.js';
 import type { SessionState } from '../types/models.js';
 
@@ -34,6 +37,30 @@ async function loadStateFromDb(): Promise<SessionState> {
   }
 }
 
+function resolveStateFilePath(): string {
+  if (process.env.TOKENSUN_STATE_FILE) return process.env.TOKENSUN_STATE_FILE;
+  return join(process.cwd(), '.data', 'tokensun-state.enc');
+}
+
+async function loadStateFromFile(filePath: string): Promise<SessionState> {
+  try {
+    const raw = await readFile(filePath, 'utf8');
+    return normalizeSession(decodeStateFromStorage(raw));
+  } catch {
+    return emptySession();
+  }
+}
+
+async function saveStateToFile(filePath: string, nextSession: SessionState): Promise<void> {
+  const normalized = normalizeSession(nextSession);
+  const encoded = encodeStateForStorage(normalized);
+  const dir = dirname(filePath);
+  const tempPath = `${filePath}.tmp`;
+  await mkdir(dir, { recursive: true });
+  await writeFile(tempPath, encoded, 'utf8');
+  await rename(tempPath, filePath);
+}
+
 async function saveStateToDb(nextSession: SessionState): Promise<void> {
   const pool = getPool();
   const normalized = normalizeSession(nextSession);
@@ -51,16 +78,26 @@ async function saveStateToDb(nextSession: SessionState): Promise<void> {
 
 const sessionPlugin: FastifyPluginAsync = async (fastify) => {
   const useInMemory = process.env.NODE_ENV === 'test';
+  const useFileFallback = !useInMemory && !hasDatabaseConfig();
+  const fallbackStateFile = resolveStateFilePath();
   let inMemoryState = normalizeSession(EMPTY_SESSION);
 
   fastify.addHook('onRequest', async (req) => {
     req.sessionId = 'shared';
-    req.session = useInMemory ? normalizeSession(inMemoryState) : await loadStateFromDb();
+    if (useInMemory) {
+      req.session = normalizeSession(inMemoryState);
+      return;
+    }
+    req.session = useFileFallback ? await loadStateFromFile(fallbackStateFile) : await loadStateFromDb();
   });
 
   fastify.decorateReply('commitSession', async function commitSession(nextSession: SessionState) {
     if (useInMemory) {
       inMemoryState = normalizeSession(nextSession);
+      return;
+    }
+    if (useFileFallback) {
+      await saveStateToFile(fallbackStateFile, nextSession);
       return;
     }
     await saveStateToDb(nextSession);

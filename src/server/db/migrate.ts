@@ -1,7 +1,8 @@
-import { getPool } from './pool.js';
+import { getPool, hasDatabaseConfig } from './pool.js';
 
 export async function migrate(): Promise<void> {
   if (process.env.NODE_ENV === 'test') return;
+  if (!hasDatabaseConfig()) return;
 
   const pool = getPool();
   await pool.query(`

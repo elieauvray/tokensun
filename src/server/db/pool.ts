@@ -22,6 +22,10 @@ type PgPool = {
 let pool: PgPool | undefined;
 const require = createRequire(import.meta.url);
 
+export function hasDatabaseConfig(): boolean {
+  return Boolean(process.env.DATABASE_URL || process.env.PLATFORM_RELATIONSHIPS);
+}
+
 function decodeMaybeBase64Json(raw: string): Record<string, unknown> {
   let decoded = raw;
   try {
