@@ -1,10 +1,15 @@
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers ?? {});
+  const hasBody = init?.body !== undefined && init?.body !== null;
+  const bodyIsFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData;
+
+  if (hasBody && !bodyIsFormData && !headers.has('content-type')) {
+    headers.set('content-type', 'application/json');
+  }
+
   const res = await fetch(path, {
     credentials: 'include',
-    headers: {
-      'content-type': 'application/json',
-      ...(init?.headers ?? {})
-    },
+    headers,
     ...init
   });
 
