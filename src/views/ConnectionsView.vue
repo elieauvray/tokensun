@@ -162,7 +162,11 @@ async function deleteConnection(id: string) {
   deletingId.value = id;
   message.value = 'Deleting connection...';
   try {
-    await api(`/api/connections/${id}`, { method: 'DELETE' });
+    const res = await api<{ ok: boolean; message?: string }>(`/api/connections/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      message.value = `Delete failed: ${res.message ?? 'unknown_error'}`;
+      return;
+    }
     message.value = 'Connection deleted';
     await loadConnections();
   } catch (err) {

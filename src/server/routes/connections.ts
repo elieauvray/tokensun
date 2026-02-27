@@ -79,17 +79,17 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post('/connections/:id/test', async (req) => {
-    const parsedId = z.string().uuid().safeParse((req.params as any).id);
-    if (!parsedId.success) {
-      return { ok: false, message: 'invalid_connection_id' };
-    }
-    const id = parsedId.data;
-    const connection = req.session.connections.find((c) => c.id === id);
-    if (!connection) {
-      return { ok: false, message: 'connection_not_found' };
-    }
-
     try {
+      const parsedId = z.string().uuid().safeParse((req.params as any).id);
+      if (!parsedId.success) {
+        return { ok: false, message: 'invalid_connection_id' };
+      }
+      const id = parsedId.data;
+      const connection = req.session.connections.find((c) => c.id === id);
+      if (!connection) {
+        return { ok: false, message: 'connection_not_found' };
+      }
+
       await runConnectionTest(connection);
       return { ok: true, message: 'connection_ok' };
     } catch (err) {
@@ -126,12 +126,25 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.delete('/connections/:id', async (req, reply) => {
-    const id = z.string().uuid().parse((req.params as any).id);
+    try {
+      const parsedId = z.string().uuid().safeParse((req.params as any).id);
+      if (!parsedId.success) {
+        return { ok: false, message: 'invalid_connection_id' };
+      }
+      const id = parsedId.data;
 
-    const connections = req.session.connections.filter((c) => c.id !== id);
-    await reply.commitSession({ ...req.session, connections });
+      const before = req.session.connections.length;
+      const connections = req.session.connections.filter((c) => c.id !== id);
+      if (connections.length === before) {
+        return { ok: false, message: 'connection_not_found' };
+      }
 
-    return { ok: true };
+      await reply.commitSession({ ...req.session, connections });
+      return { ok: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'connection_delete_failed';
+      return { ok: false, message: msg };
+    }
   });
 };
 
