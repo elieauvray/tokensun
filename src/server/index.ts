@@ -36,7 +36,15 @@ export function buildServer() {
   app.register(sessionPlugin);
   app.register(rateLimitPlugin);
 
-  app.setErrorHandler((err, _req, reply) => {
+  app.setErrorHandler((err, req, reply) => {
+    app.log.error(
+      {
+        err,
+        method: req.method,
+        url: req.url
+      },
+      'request_failed'
+    );
     if (err instanceof ZodError) {
       reply.code(400).send({ error: 'validation_error', details: err.issues });
       return;
