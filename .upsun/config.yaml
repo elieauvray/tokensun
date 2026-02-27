@@ -19,7 +19,7 @@ applications:
     hooks:
       build: |
         set -e
-        npm install
+        npm install --legacy-peer-deps
         npm run build
       deploy: |
         set -e
