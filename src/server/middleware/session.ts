@@ -41,6 +41,9 @@ const sessionPlugin: FastifyPluginAsync = async (fastify) => {
       httpOnly: true,
       secure: isProd,
       sameSite: isProd ? 'none' : 'lax',
+      // Plugin UI is embedded in Upsun Console (third-party context).
+      // Partitioned cookies (CHIPS) keep session persistence working in modern browsers.
+      ...(isProd ? ({ partitioned: true } as const) : {}),
       path: '/',
       maxAge: 60 * 60 * 24 * 7
     });
