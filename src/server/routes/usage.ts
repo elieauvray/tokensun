@@ -48,16 +48,32 @@ async function loadPoints(connection: ConnectionRecord, start: string, end: stri
 
 const usageRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/usage/refresh', async (req, reply) => {
-    const body = refreshSchema.parse(req.body);
+    const parsed = refreshSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return { ok: false, rowsAdded: 0, errors: [{ message: 'invalid_refresh_request' }] };
+    }
 
+    const body = parsed.data;
     const selected = body.connectionId
       ? req.session.connections.filter((c) => c.id === body.connectionId)
       : req.session.connections;
 
     const incoming: UsageBucket[] = [];
+    const errors: Array<{ connectionId?: string; provider?: string; message: string }> = [];
 
     for (const connection of selected) {
-      const points = await loadPoints(connection, body.start, body.end);
+      let points: Point[] = [];
+      try {
+        points = await loadPoints(connection, body.start, body.end);
+      } catch (err) {
+        errors.push({
+          connectionId: connection.id,
+          provider: connection.provider,
+          message: err instanceof Error ? err.message : 'usage_fetch_failed'
+        });
+        continue;
+      }
+
       for (const point of points) {
         for (const granularity of ['hour', 'week', 'month', 'year'] as const) {
           const reported = typeof point.costUsd === 'number';
@@ -90,14 +106,18 @@ const usageRoutes: FastifyPluginAsync = async (fastify) => {
     const usage = upsertUsageBuckets(req.session.usage, incoming);
     await reply.commitSession({ ...req.session, usage });
 
-    return { ok: true, rowsAdded: incoming.length };
+    return { ok: errors.length === 0, rowsAdded: incoming.length, errors };
   });
 
-  fastify.get('/usage/query', async (req) => {
-    const filters = querySchema.parse(req.query);
+  fastify.get('/usage/query', async (req, reply) => {
+    const parsed = querySchema.safeParse(req.query);
+    if (!parsed.success) {
+      reply.code(400);
+      return { error: 'invalid_query' };
+    }
 
     return {
-      rows: queryUsage(req.session.usage, filters)
+      rows: queryUsage(req.session.usage, parsed.data)
     };
   });
 };

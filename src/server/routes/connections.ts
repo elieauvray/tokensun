@@ -28,7 +28,7 @@ const updateSchema = upsertSchema.partial().refine((v) => !!(v.name || v.config 
   message: 'at_least_one_field_required'
 });
 
-async function runConnectionTest(connection: ConnectionRecord): Promise<void> {
+async function runConnectionTest(connection: ConnectionRecord): Promise<Record<string, unknown>> {
   if (connection.provider !== 'openai') {
     throw new Error('unsupported_provider');
   }
@@ -90,8 +90,8 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
         return { ok: false, message: 'connection_not_found' };
       }
 
-      await runConnectionTest(connection);
-      return { ok: true, message: 'connection_ok' };
+      const details = await runConnectionTest(connection);
+      return { ok: true, message: 'connection_ok', details };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'connection_test_failed';
       return { ok: false, message: msg };

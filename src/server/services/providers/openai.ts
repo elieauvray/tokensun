@@ -17,13 +17,47 @@ type UsagePoint = {
   costUsd?: number;
 };
 
+const OPENAI_TIMEOUT_MS = Number(process.env.TOKENSUN_OPENAI_TIMEOUT_MS ?? 20000);
+
+export type OpenAITestResult = {
+  checkedAt: string;
+  modelCount: number;
+  sampleModels: string[];
+};
+
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('openai_timeout');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function readOpenAIErrorDetail(res: Response): Promise<string> {
+  const raw = await res.text();
+  try {
+    const parsed = JSON.parse(raw) as { error?: { message?: string } };
+    return parsed.error?.message?.trim() ?? '';
+  } catch {
+    return raw.trim().slice(0, 200);
+  }
+}
+
 async function requestOpenAI(
   connection: ConnectionRecord,
   endpoint: string,
   query: URLSearchParams
 ): Promise<any> {
   const base = connection.config.baseUrl ?? 'https://api.openai.com';
-  const res = await fetch(`${base}${endpoint}?${query.toString()}`, {
+  const res = await fetchWithTimeout(`${base}${endpoint}?${query.toString()}`, {
     headers: {
       authorization: `Bearer ${connection.secrets.apiKey}`,
       ...(connection.config.openaiOrg ? { 'OpenAI-Organization': connection.config.openaiOrg } : {}),
@@ -32,7 +66,8 @@ async function requestOpenAI(
   });
 
   if (!res.ok) {
-    throw new Error(`openai_api_error:${res.status}`);
+    const detail = await readOpenAIErrorDetail(res);
+    throw new Error(`openai_api_error:${res.status}${detail ? `:${detail}` : ''}`);
   }
 
   return res.json();
@@ -64,9 +99,9 @@ function toUnixSeconds(iso: string): string {
   return String(Math.floor(new Date(iso).getTime() / 1000));
 }
 
-export async function testOpenAI(connection: ConnectionRecord): Promise<void> {
+export async function testOpenAI(connection: ConnectionRecord): Promise<OpenAITestResult> {
   const base = connection.config.baseUrl ?? 'https://api.openai.com';
-  const res = await fetch(`${base}/v1/models`, {
+  const res = await fetchWithTimeout(`${base}/v1/models`, {
     headers: {
       authorization: `Bearer ${connection.secrets.apiKey}`,
       ...(connection.config.openaiOrg ? { 'OpenAI-Organization': connection.config.openaiOrg } : {}),
@@ -74,16 +109,18 @@ export async function testOpenAI(connection: ConnectionRecord): Promise<void> {
     }
   });
   if (!res.ok) {
-    const raw = await res.text();
-    let detail = '';
-    try {
-      const parsed = JSON.parse(raw) as { error?: { message?: string } };
-      detail = parsed.error?.message ?? '';
-    } catch {
-      detail = raw.slice(0, 120);
-    }
+    const detail = await readOpenAIErrorDetail(res);
     throw new Error(`openai_test_failed:${res.status}${detail ? `:${detail}` : ''}`);
   }
+
+  const payload = (await res.json()) as { data?: Array<{ id?: string }> };
+  const ids = Array.isArray(payload.data) ? payload.data.map((x) => x?.id).filter((v): v is string => typeof v === 'string') : [];
+
+  return {
+    checkedAt: new Date().toISOString(),
+    modelCount: ids.length,
+    sampleModels: ids.slice(0, 5)
+  };
 }
 
 export async function fetchOpenAIUsage(
@@ -97,7 +134,7 @@ export async function fetchOpenAIUsage(
   const usageBuckets = await requestOpenAIPaginated(
     connection,
     '/v1/organization/usage/completions',
-    new URLSearchParams({ start_time: startSec, end_time: endSec })
+    new URLSearchParams({ start_time: startSec, end_time: endSec, bucket_width: '1d' })
   );
 
   let costBuckets: any[] = [];
@@ -105,7 +142,7 @@ export async function fetchOpenAIUsage(
     costBuckets = await requestOpenAIPaginated(
       connection,
       '/v1/organization/costs',
-      new URLSearchParams({ start_time: startSec, end_time: endSec })
+      new URLSearchParams({ start_time: startSec, end_time: endSec, bucket_width: '1d' })
     );
   } catch {
     costBuckets = [];
