@@ -3,6 +3,9 @@ applications:
     source:
       root: "/"
     type: "nodejs:22"
+    variables:
+      env:
+        NPM_CONFIG_LEGACY_PEER_DEPS: "true"
     relationships:
       database: "db:postgresql"
     mounts:
