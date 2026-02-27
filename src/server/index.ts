@@ -41,7 +41,11 @@ export function buildServer() {
       reply.code(400).send({ error: 'validation_error', details: err.issues });
       return;
     }
-    reply.code(500).send({ error: 'internal_error' });
+    const exposeDetails = process.env.NODE_ENV !== 'production';
+    reply.code(500).send({
+      error: 'internal_error',
+      ...(exposeDetails ? { message: err instanceof Error ? err.message : String(err) } : {})
+    });
   });
 
   app.get('/healthz', async () => ({ ok: true }));
