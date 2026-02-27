@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { access, readFile } from 'node:fs/promises';
 import { ZodError } from 'zod';
 import { assertMasterKeyConfigured } from './crypto/envelope.js';
+import { migrate } from './db/migrate.js';
 import sessionPlugin from './middleware/session.js';
 import rateLimitPlugin from './middleware/rateLimit.js';
 import authRoutes from './routes/auth.js';
@@ -76,11 +77,13 @@ export function buildServer() {
     api.register(exportRoutes);
   }, { prefix: '/api' });
 
-  const distDir = join(__dirname, '../../dist');
-  app.register(fastifyStatic, {
-    root: distDir,
-    wildcard: false
-  });
+  if (process.env.NODE_ENV !== 'test') {
+    const distDir = join(__dirname, '../../dist');
+    app.register(fastifyStatic, {
+      root: distDir,
+      wildcard: false
+    });
+  }
 
   app.setNotFoundHandler(async (req, reply) => {
     if (req.url.startsWith('/api/')) {
@@ -96,6 +99,7 @@ export function buildServer() {
 async function start() {
   // Fail fast if encryption is not configured.
   assertMasterKeyConfigured();
+  await migrate();
 
   const app = buildServer();
   const port = Number(process.env.PORT ?? 8888);

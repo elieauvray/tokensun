@@ -73,7 +73,7 @@ const usageRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const usage = upsertUsageBuckets(req.session.usage, incoming);
-    reply.commitSession({ ...req.session, usage });
+    await reply.commitSession({ ...req.session, usage });
 
     return { ok: true, rowsAdded: incoming.length };
   });

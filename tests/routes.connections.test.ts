@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildServer } from '../src/server/index.js';
 
-function extractCookie(setCookie: string): string {
-  return setCookie.split(';')[0];
-}
-
 describe('connections routes', () => {
   beforeEach(() => {
     process.env.TOKENSUN_MASTER_KEY = Buffer.alloc(32, 3).toString('base64');
@@ -22,13 +18,11 @@ describe('connections routes', () => {
         upsunProjectId: 'proj'
       }
     });
-
-    const cookie = extractCookie(String(bootstrap.headers['set-cookie']));
+    expect(bootstrap.statusCode).toBe(200);
 
     const invalid = await app.inject({
       method: 'POST',
       url: '/api/connections',
-      headers: { cookie },
       payload: {
         provider: 'bad-provider',
         name: 'X',
@@ -42,7 +36,6 @@ describe('connections routes', () => {
     const valid = await app.inject({
       method: 'POST',
       url: '/api/connections',
-      headers: { cookie },
       payload: {
         provider: 'openai',
         name: 'X',
@@ -55,8 +48,7 @@ describe('connections routes', () => {
 
     const list = await app.inject({
       method: 'GET',
-      url: '/api/connections',
-      headers: { cookie: extractCookie(String(valid.headers['set-cookie'])) }
+      url: '/api/connections'
     });
 
     expect(list.statusCode).toBe(200);

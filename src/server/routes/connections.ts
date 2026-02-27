@@ -77,7 +77,7 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
       connections: [...req.session.connections, next]
     };
 
-    reply.commitSession(session);
+    await reply.commitSession(session);
     return { connection: toPublicConnection(next) };
   });
 
@@ -114,7 +114,7 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const connections = [...req.session.connections];
     connections[idx] = updated;
-    reply.commitSession({ ...req.session, connections });
+    await reply.commitSession({ ...req.session, connections });
 
     return { connection: toPublicConnection(updated) };
   });
@@ -123,7 +123,7 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
     const id = z.string().uuid().parse((req.params as any).id);
 
     const connections = req.session.connections.filter((c) => c.id !== id);
-    reply.commitSession({ ...req.session, connections });
+    await reply.commitSession({ ...req.session, connections });
 
     return { ok: true };
   });

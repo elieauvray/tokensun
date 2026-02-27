@@ -11,11 +11,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@fastify/cookie": "^9.4.0",
     "@fastify/static": "^7.0.4",
     "chart.js": "^4.4.1",
-    "fastify": "^4.28.1",
+    "fastify": "^5.7.4",
     "fastify-plugin": "^5.0.1",
+    "pg": "^8.13.3",
     "primeicons": "^7.0.0",
     "primevue": "^3.53.1",
     "vue": "^3.5.13",
@@ -26,8 +26,8 @@
     "@types/node": "^22.10.2",
     "@vitejs/plugin-vue": "^5.2.1",
     "typescript": "^5.7.2",
-    "vite": "^5.4.11",
-    "vitest": "^2.1.8"
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18"
   },
   "license": "Apache-2.0"
 }

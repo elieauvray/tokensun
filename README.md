@@ -2,10 +2,10 @@
 
 TokenSun is an Upsun plugin app for managing LLM provider connections and credentials across providers.
 
-This repository is implemented as a **stateless plugin app**:
-- No database
-- No migration runtime requirements
-- Session/workspace state is encrypted into an HttpOnly cookie
+This repository is implemented as a **stateful plugin app**:
+- PostgreSQL-backed shared persistence
+- Runtime migrations at startup
+- Session/workspace payload is encrypted before storage
 
 ## Features
 
@@ -22,7 +22,7 @@ This repository is implemented as a **stateless plugin app**:
   - year
 - CSV export
 - Encrypted secret storage (AES-256-GCM)
-- Session cookie auth (HttpOnly, no localStorage token)
+- Shared server-side app state
 - API input validation with `zod`
 - Per-workspace/session rate limiting
 
@@ -33,17 +33,14 @@ This repository is implemented as a **stateless plugin app**:
 - Deployment pattern: SPA served from `dist` + Node server process for `/api/*`
 - Plugin integration: `manifest.json` + `.upsun/config.yaml`
 
-## Stateless Mode (Important)
+## Shared Persistence (Important)
 
-TokenSun currently runs in stateless mode.
+TokenSun now runs with shared PostgreSQL persistence.
 
 What this means:
-- Connection metadata, encrypted provider secrets, and usage buckets are stored in the encrypted session cookie.
-- There is no PostgreSQL dependency at runtime.
-- Losing the cookie means losing local session state.
-
-Operational implication:
-- Keep payload size in mind. Very large numbers of connections/usage rows can exceed browser cookie limits.
+- Connection metadata, encrypted provider secrets, and usage buckets are stored server-side in PostgreSQL.
+- State is shared across users of the same deployed environment.
+- Cookie loss no longer removes app state.
 
 ## Repository Layout
 
@@ -192,10 +189,11 @@ Secret variable defaults:
 
 ## Security Model
 
-- AES-256-GCM encryption for session payload and secrets at rest in cookie envelope
+- AES-256-GCM encryption for workspace/session payload and secrets before PostgreSQL storage
+- Database constraint checks enforce encrypted payload format (base64url envelope, plaintext JSON rejected)
 - Master key loaded from `TOKENSUN_MASTER_KEY`
 - Fast fail on missing/invalid master key
-- HttpOnly session cookie
+- Server-side persistence (shared across users)
 - Input validation on all routes with `zod`
 - Redaction of sensitive fields in logs
 - Route rate limiting
@@ -212,7 +210,7 @@ Included unit/API tests cover:
 
 ## Known Limitations
 
-- Stateless mode may hit cookie-size limits for large usage histories.
+- Current schema stores all state as a single encrypted payload row; very large histories should eventually be normalized into dedicated tables.
 - Gemini/Mistral usage ingestion is currently estimate-oriented unless detailed provider usage signals are available.
 - No realtime streaming updates (polling/refresh model only).
 

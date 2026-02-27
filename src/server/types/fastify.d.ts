@@ -8,6 +8,6 @@ declare module 'fastify' {
   }
 
   interface FastifyReply {
-    commitSession: (nextSession: SessionState) => void;
+    commitSession: (nextSession: SessionState) => Promise<void>;
   }
 }

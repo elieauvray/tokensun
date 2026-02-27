@@ -58,7 +58,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       usage: req.session.usage ?? []
     };
 
-    reply.commitSession(session);
+    await reply.commitSession(session);
     return {
       ok: true,
       workspace: {
