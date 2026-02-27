@@ -79,49 +79,79 @@ const form = reactive({
 const message = ref('');
 const connections = ref<any[]>([]);
 
+function formatApiError(err: unknown): string {
+  if (!(err instanceof Error)) return 'Request failed';
+  try {
+    const parsed = JSON.parse(err.message) as { error?: string };
+    if (parsed.error === 'validation_error') {
+      return 'Invalid connection settings. Check required fields and try again.';
+    }
+    return parsed.error ?? 'Request failed';
+  } catch {
+    return err.message || 'Request failed';
+  }
+}
+
 async function loadConnections() {
-  const res = await api<{ connections: any[] }>('/api/connections');
-  connections.value = res.connections;
+  try {
+    const res = await api<{ connections: any[] }>('/api/connections');
+    connections.value = res.connections;
+  } catch (err) {
+    message.value = `Failed to load connections: ${formatApiError(err)}`;
+  }
 }
 
 async function createConnection() {
-  await api('/api/connections', {
-    method: 'POST',
-    body: JSON.stringify({
-      provider: form.provider,
-      name: form.name,
-      config: {
-        baseUrl: form.baseUrl || undefined,
-        models: form.modelsRaw
-          .split(',')
-          .map((m) => m.trim())
-          .filter(Boolean)
-      },
-      secrets: {
-        apiKey: form.apiKey
-      }
-    })
-  });
+  try {
+    const fallbackName = `${form.provider.toUpperCase()} connection`;
+    await api('/api/connections', {
+      method: 'POST',
+      body: JSON.stringify({
+        provider: form.provider,
+        name: form.name.trim() || fallbackName,
+        config: {
+          baseUrl: form.baseUrl || undefined,
+          models: form.modelsRaw
+            .split(',')
+            .map((m) => m.trim())
+            .filter(Boolean)
+        },
+        secrets: {
+          apiKey: form.apiKey
+        }
+      })
+    });
 
-  form.name = '';
-  form.baseUrl = '';
-  form.apiKey = '';
-  form.modelsRaw = '';
-  message.value = 'Connection created';
-  await loadConnections();
+    form.name = '';
+    form.baseUrl = '';
+    form.apiKey = '';
+    form.modelsRaw = '';
+    message.value = 'Connection created';
+    await loadConnections();
+  } catch (err) {
+    message.value = `Create failed: ${formatApiError(err)}`;
+  }
 }
 
 async function testConnection(id: string) {
-  const res = await api<{ ok: boolean; message: string }>(`/api/connections/${id}/test`, {
-    method: 'POST'
-  });
-  message.value = res.message;
+  try {
+    const res = await api<{ ok: boolean; message: string }>(`/api/connections/${id}/test`, {
+      method: 'POST'
+    });
+    message.value = res.message;
+  } catch (err) {
+    message.value = `Test failed: ${formatApiError(err)}`;
+  }
 }
 
 async function deleteConnection(id: string) {
-  await api(`/api/connections/${id}`, { method: 'DELETE' });
-  message.value = 'Connection deleted';
-  await loadConnections();
+  try {
+    await api(`/api/connections/${id}`, { method: 'DELETE' });
+    message.value = 'Connection deleted';
+    await loadConnections();
+  } catch (err) {
+    message.value = `Delete failed: ${formatApiError(err)}`;
+  }
 }
 
 onMounted(loadConnections);
