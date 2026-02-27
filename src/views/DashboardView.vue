@@ -3,14 +3,18 @@
     <article class="console-panel">
       <header class="console-panel-header">
         <h2 class="console-panel-title">Usage and cost dashboard</h2>
-        <p class="console-panel-subtitle">Timeline and provider cost reporting with hour/week/month/year buckets.</p>
+        <p class="console-panel-subtitle">OpenAI usage dashboard with all fields from the Completions Usage API.</p>
       </header>
       <div class="console-panel-body console-grid-4">
         <Dropdown v-model="filters.granularity" :options="granularities" />
         <InputText v-model="filters.start" placeholder="ISO start" />
         <InputText v-model="filters.end" placeholder="ISO end" />
-        <InputText v-model="filters.provider" placeholder="Provider (optional)" />
+        <InputText value="openai" disabled />
         <InputText v-model="filters.model" placeholder="Model (optional)" />
+        <InputText v-model="filters.projectId" placeholder="Project ID (optional)" />
+        <InputText v-model="filters.userId" placeholder="User ID (optional)" />
+        <InputText v-model="filters.apiKeyId" placeholder="API Key ID (optional)" />
+        <Dropdown v-model="filters.batch" :options="batchOptions" optionLabel="label" optionValue="value" placeholder="Batch (optional)" />
         <Button label="Refresh usage" @click="refreshUsage" />
         <Button label="Query" severity="secondary" @click="queryUsage" />
         <a :href="csvHref" class="console-link" target="_blank" rel="noreferrer">Export CSV</a>
@@ -29,6 +33,16 @@
           <Column field="bucketStart" header="Bucket" />
           <Column field="provider" header="Provider" />
           <Column field="model" header="Model" />
+          <Column field="projectId" header="Project" />
+          <Column field="userId" header="User" />
+          <Column field="apiKeyId" header="API Key" />
+          <Column field="batch" header="Batch" />
+          <Column field="numModelRequests" header="Requests" />
+          <Column field="inputTokens" header="Input" />
+          <Column field="inputCachedTokens" header="Cached Input" />
+          <Column field="inputAudioTokens" header="Input Audio" />
+          <Column field="outputTokens" header="Output" />
+          <Column field="outputAudioTokens" header="Output Audio" />
           <Column field="totalTokens" header="Total tokens" />
           <Column field="costUsd" header="Cost (USD)" />
           <Column field="costMode" header="Mode" />
@@ -54,6 +68,11 @@ const canvasRef = ref<HTMLCanvasElement | null>(null);
 let chart: Chart | null = null;
 
 const granularities = ['hour', 'week', 'month', 'year'];
+const batchOptions = [
+  { label: 'Any', value: '' },
+  { label: 'true', value: 'true' },
+  { label: 'false', value: 'false' }
+];
 const now = new Date();
 const ago = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
@@ -61,8 +80,12 @@ const filters = reactive({
   granularity: 'hour',
   start: ago.toISOString(),
   end: now.toISOString(),
-  provider: '',
-  model: ''
+  provider: 'openai',
+  model: '',
+  projectId: '',
+  userId: '',
+  apiKeyId: '',
+  batch: ''
 });
 
 const rows = ref<any[]>([]);
@@ -74,6 +97,10 @@ const qs = computed(() => {
   p.set('end', filters.end);
   if (filters.provider) p.set('provider', filters.provider);
   if (filters.model) p.set('model', filters.model);
+  if (filters.projectId) p.set('projectId', filters.projectId);
+  if (filters.userId) p.set('userId', filters.userId);
+  if (filters.apiKeyId) p.set('apiKeyId', filters.apiKeyId);
+  if (filters.batch) p.set('batch', filters.batch);
   return p.toString();
 });
 

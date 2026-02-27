@@ -8,6 +8,10 @@ const querySchema = z.object({
   end: z.string().datetime(),
   provider: z.string().optional(),
   model: z.string().optional(),
+  projectId: z.string().optional(),
+  userId: z.string().optional(),
+  apiKeyId: z.string().optional(),
+  batch: z.enum(['true', 'false']).optional(),
   connectionId: z.string().uuid().optional()
 });
 
@@ -22,9 +26,17 @@ const exportRoutes: FastifyPluginAsync = async (fastify) => {
       'connectionId',
       'provider',
       'model',
+      'projectId',
+      'userId',
+      'apiKeyId',
+      'batch',
       'inputTokens',
+      'inputCachedTokens',
+      'inputAudioTokens',
       'outputTokens',
+      'outputAudioTokens',
       'totalTokens',
+      'numModelRequests',
       'costUsd',
       'costMode'
     ];
@@ -36,9 +48,17 @@ const exportRoutes: FastifyPluginAsync = async (fastify) => {
         r.connectionId,
         r.provider,
         r.model,
+        r.projectId ?? '',
+        r.userId ?? '',
+        r.apiKeyId ?? '',
+        r.batch === undefined ? '' : String(r.batch),
         r.inputTokens,
+        r.inputCachedTokens,
+        r.inputAudioTokens,
         r.outputTokens,
+        r.outputAudioTokens,
         r.totalTokens,
+        r.numModelRequests,
         r.costUsd,
         r.costMode
       ]

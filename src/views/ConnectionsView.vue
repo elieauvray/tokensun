@@ -16,10 +16,10 @@
     <article class="console-panel">
       <header class="console-panel-header">
         <h2 class="console-panel-title">Provider connections</h2>
-        <p class="console-panel-subtitle">Create and manage multiple LLM provider connections.</p>
+        <p class="console-panel-subtitle">Create and manage OpenAI provider connections.</p>
       </header>
       <div class="console-panel-body console-grid-4">
-        <Dropdown v-model="form.provider" :options="providers" placeholder="Provider" />
+        <InputText value="openai" disabled />
         <InputText v-model="form.name" placeholder="Connection name" />
         <InputText v-model="form.baseUrl" placeholder="Base URL (optional)" />
         <InputText v-model="form.apiKey" type="password" placeholder="API key" />
@@ -59,17 +59,12 @@
 import { onMounted, reactive, ref } from 'vue';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
-import Dropdown from 'primevue/dropdown';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import { api } from '../components/api';
 
-type Provider = 'openai' | 'anthropic' | 'gemini' | 'mistral';
-
-const providers: Provider[] = ['openai', 'anthropic', 'gemini', 'mistral'];
-
 const form = reactive({
-  provider: 'openai' as Provider,
+  provider: 'openai' as const,
   name: '',
   baseUrl: '',
   apiKey: '',
@@ -95,7 +90,7 @@ function formatApiError(err: unknown): string {
 async function loadConnections() {
   try {
     const res = await api<{ connections: any[] }>('/api/connections');
-    connections.value = res.connections;
+    connections.value = res.connections.filter((c) => c.provider === 'openai');
   } catch (err) {
     message.value = `Failed to load connections: ${formatApiError(err)}`;
   }
@@ -138,7 +133,7 @@ async function testConnection(id: string) {
     const res = await api<{ ok: boolean; message: string }>(`/api/connections/${id}/test`, {
       method: 'POST'
     });
-    message.value = res.message;
+    message.value = res.ok ? 'OpenAI connection OK' : `OpenAI test failed: ${res.message}`;
   } catch (err) {
     message.value = `Test failed: ${formatApiError(err)}`;
   }

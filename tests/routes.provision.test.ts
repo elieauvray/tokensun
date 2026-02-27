@@ -34,8 +34,8 @@ describe('provision route allowlist enforcement', () => {
       method: 'POST',
       url: '/api/connections',
       payload: {
-        provider: 'anthropic',
-        name: 'claude',
+        provider: 'openai',
+        name: 'openai-main',
         config: {},
         secrets: { apiKey: 'a'.repeat(16) }
       }

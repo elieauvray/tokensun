@@ -2,12 +2,9 @@ import type { FastifyPluginAsync } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { testOpenAI } from '../services/providers/openai.js';
-import { testAnthropic } from '../services/providers/anthropic.js';
-import { testGemini } from '../services/providers/gemini.js';
-import { testMistral } from '../services/providers/mistral.js';
 import type { ConnectionRecord, Provider } from '../types/models.js';
 
-const providerSchema = z.enum(['openai', 'anthropic', 'gemini', 'mistral']);
+const providerSchema = z.literal('openai');
 
 const upsertSchema = z.object({
   provider: providerSchema,
@@ -32,10 +29,10 @@ const updateSchema = upsertSchema.partial().refine((v) => !!(v.name || v.config 
 });
 
 async function runConnectionTest(connection: ConnectionRecord): Promise<void> {
-  if (connection.provider === 'openai') return testOpenAI(connection);
-  if (connection.provider === 'anthropic') return testAnthropic(connection);
-  if (connection.provider === 'gemini') return testGemini(connection);
-  return testMistral(connection);
+  if (connection.provider !== 'openai') {
+    throw new Error('unsupported_provider');
+  }
+  return testOpenAI(connection);
 }
 
 function toPublicConnection(connection: ConnectionRecord) {
@@ -88,8 +85,13 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
       return { ok: false, message: 'connection_not_found' };
     }
 
-    await runConnectionTest(connection);
-    return { ok: true, message: 'connection_ok' };
+    try {
+      await runConnectionTest(connection);
+      return { ok: true, message: 'connection_ok' };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'connection_test_failed';
+      return { ok: false, message: msg };
+    }
   });
 
   fastify.put('/connections/:id', async (req, reply) => {

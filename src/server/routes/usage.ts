@@ -1,9 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { fetchOpenAIUsage } from '../services/providers/openai.js';
-import { fetchAnthropicUsage } from '../services/providers/anthropic.js';
-import { fetchGeminiUsage } from '../services/providers/gemini.js';
-import { fetchMistralUsage } from '../services/providers/mistral.js';
 import { computeCostUsd } from '../services/pricing.js';
 import { queryUsage, toBucketStart, upsertUsageBuckets } from '../services/usageAggregator.js';
 import type { ConnectionRecord, UsageBucket } from '../types/models.js';
@@ -20,23 +17,33 @@ const querySchema = z.object({
   end: z.string().datetime(),
   provider: z.string().optional(),
   model: z.string().optional(),
+  projectId: z.string().optional(),
+  userId: z.string().optional(),
+  apiKeyId: z.string().optional(),
+  batch: z.enum(['true', 'false']).optional(),
   connectionId: z.string().uuid().optional()
 });
 
 type Point = {
   ts: string;
   model: string;
+  projectId?: string;
+  userId?: string;
+  apiKeyId?: string;
+  batch?: boolean;
   inputTokens: number;
+  inputCachedTokens: number;
+  inputAudioTokens: number;
   outputTokens: number;
+  outputAudioTokens: number;
   totalTokens: number;
+  numModelRequests: number;
   costUsd?: number;
 };
 
 async function loadPoints(connection: ConnectionRecord, start: string, end: string): Promise<Point[]> {
-  if (connection.provider === 'openai') return fetchOpenAIUsage(connection, start, end);
-  if (connection.provider === 'anthropic') return fetchAnthropicUsage(connection, start, end);
-  if (connection.provider === 'gemini') return fetchGeminiUsage();
-  return fetchMistralUsage();
+  if (connection.provider !== 'openai') return [];
+  return fetchOpenAIUsage(connection, start, end);
 }
 
 const usageRoutes: FastifyPluginAsync = async (fastify) => {
@@ -60,11 +67,19 @@ const usageRoutes: FastifyPluginAsync = async (fastify) => {
             connectionId: connection.id,
             provider: connection.provider,
             model: point.model,
+            projectId: point.projectId,
+            userId: point.userId,
+            apiKeyId: point.apiKeyId,
+            batch: point.batch,
             bucketStart: toBucketStart(point.ts, granularity),
             bucketGranularity: granularity,
             inputTokens: point.inputTokens,
+            inputCachedTokens: point.inputCachedTokens,
+            inputAudioTokens: point.inputAudioTokens,
             outputTokens: point.outputTokens,
+            outputAudioTokens: point.outputAudioTokens,
             totalTokens: point.totalTokens,
+            numModelRequests: point.numModelRequests,
             costUsd: Number(cost.toFixed(8)),
             costMode: reported ? 'reported' : 'estimated'
           });

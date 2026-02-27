@@ -32,6 +32,10 @@ function keyOf(row: UsageBucket): string {
     row.connectionId,
     row.provider,
     row.model,
+    row.projectId ?? '',
+    row.userId ?? '',
+    row.apiKeyId ?? '',
+    row.batch === undefined ? '' : String(row.batch),
     row.bucketStart,
     row.bucketGranularity,
     row.costMode
@@ -55,8 +59,12 @@ export function upsertUsageBuckets(existing: UsageBucket[], incoming: UsageBucke
     map.set(key, {
       ...previous,
       inputTokens: previous.inputTokens + row.inputTokens,
+      inputCachedTokens: previous.inputCachedTokens + row.inputCachedTokens,
+      inputAudioTokens: previous.inputAudioTokens + row.inputAudioTokens,
       outputTokens: previous.outputTokens + row.outputTokens,
+      outputAudioTokens: previous.outputAudioTokens + row.outputAudioTokens,
       totalTokens: previous.totalTokens + row.totalTokens,
+      numModelRequests: previous.numModelRequests + row.numModelRequests,
       costUsd: Number((previous.costUsd + row.costUsd).toFixed(8))
     });
   }
@@ -72,6 +80,10 @@ export function queryUsage(
     end: string;
     provider?: string;
     model?: string;
+    projectId?: string;
+    userId?: string;
+    apiKeyId?: string;
+    batch?: 'true' | 'false';
     connectionId?: string;
   }
 ): UsageBucket[] {
@@ -85,6 +97,10 @@ export function queryUsage(
     if (ts < start || ts > end) return false;
     if (filters.provider && row.provider !== filters.provider) return false;
     if (filters.model && row.model !== filters.model) return false;
+    if (filters.projectId && row.projectId !== filters.projectId) return false;
+    if (filters.userId && row.userId !== filters.userId) return false;
+    if (filters.apiKeyId && row.apiKeyId !== filters.apiKeyId) return false;
+    if (filters.batch && String(row.batch) !== filters.batch) return false;
     if (filters.connectionId && row.connectionId !== filters.connectionId) return false;
     return true;
   });

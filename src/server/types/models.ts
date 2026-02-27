@@ -35,11 +35,19 @@ export interface UsageBucket {
   connectionId: string;
   provider: Provider;
   model: string;
+  projectId?: string;
+  userId?: string;
+  apiKeyId?: string;
+  batch?: boolean;
   bucketStart: string;
   bucketGranularity: 'hour' | 'week' | 'month' | 'year';
   inputTokens: number;
+  inputCachedTokens: number;
+  inputAudioTokens: number;
   outputTokens: number;
+  outputAudioTokens: number;
   totalTokens: number;
+  numModelRequests: number;
   costUsd: number;
   costMode: CostMode;
 }
