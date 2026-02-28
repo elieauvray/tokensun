@@ -21,8 +21,9 @@ const OPENAI_TIMEOUT_MS = Number(process.env.TOKENSUN_OPENAI_TIMEOUT_MS ?? 20000
 
 export type OpenAITestResult = {
   checkedAt: string;
-  modelCount: number;
-  sampleModels: string[];
+  endpoint: string;
+  bucketCount: number;
+  hasNextPage: boolean;
 };
 
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
@@ -101,7 +102,10 @@ function toUnixSeconds(iso: string): string {
 
 export async function testOpenAI(connection: ConnectionRecord): Promise<OpenAITestResult> {
   const base = connection.config.baseUrl ?? 'https://api.openai.com';
-  const res = await fetchWithTimeout(`${base}/v1/models`, {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const startSec = nowSec - 24 * 60 * 60;
+  const endpoint = `/v1/organization/usage/completions?start_time=${startSec}&end_time=${nowSec}&bucket_width=1d&limit=1`;
+  const res = await fetchWithTimeout(`${base}${endpoint}`, {
     headers: {
       authorization: `Bearer ${connection.secrets.apiKey}`,
       ...(connection.config.openaiOrg ? { 'OpenAI-Organization': connection.config.openaiOrg } : {}),
@@ -110,16 +114,19 @@ export async function testOpenAI(connection: ConnectionRecord): Promise<OpenAITe
   });
   if (!res.ok) {
     const detail = await readOpenAIErrorDetail(res);
-    throw new Error(`openai_test_failed:${res.status}${detail ? `:${detail}` : ''}`);
+    const normalizedDetail = detail || (res.status === 403 ? 'forbidden_check_admin_key_or_org_permissions' : '');
+    throw new Error(`openai_test_failed:${res.status}${normalizedDetail ? `:${normalizedDetail}` : ''}`);
   }
 
-  const payload = (await res.json()) as { data?: Array<{ id?: string }> };
-  const ids = Array.isArray(payload.data) ? payload.data.map((x) => x?.id).filter((v): v is string => typeof v === 'string') : [];
+  const payload = (await res.json()) as { data?: unknown[]; next_page?: string | null };
+  const data = Array.isArray(payload.data) ? payload.data : [];
+  const hasNextPage = typeof payload.next_page === 'string' && payload.next_page.length > 0;
 
   return {
     checkedAt: new Date().toISOString(),
-    modelCount: ids.length,
-    sampleModels: ids.slice(0, 5)
+    endpoint: '/v1/organization/usage/completions',
+    bucketCount: data.length,
+    hasNextPage
   };
 }
 

@@ -95,7 +95,7 @@ describe('connections routes', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {
-        return new Response(JSON.stringify({ data: [{ id: 'gpt-4.1-mini' }, { id: 'gpt-4.1' }] }), {
+        return new Response(JSON.stringify({ data: [{ bucket: 1 }, { bucket: 2 }], next_page: null }), {
           status: 200,
           headers: { 'content-type': 'application/json' }
         });
@@ -111,8 +111,9 @@ describe('connections routes', () => {
     const body = testRes.json();
     expect(body.ok).toBe(true);
     expect(body.message).toBe('connection_ok');
-    expect(body.details.modelCount).toBe(2);
-    expect(body.details.sampleModels).toEqual(['gpt-4.1-mini', 'gpt-4.1']);
+    expect(body.details.endpoint).toBe('/v1/organization/usage/completions');
+    expect(body.details.bucketCount).toBe(2);
+    expect(body.details.hasNextPage).toBe(false);
     expect(typeof body.details.checkedAt).toBe('string');
 
     await app.close();

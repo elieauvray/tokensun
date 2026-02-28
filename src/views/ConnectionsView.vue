@@ -190,12 +190,12 @@ async function testConnection(id: string) {
     });
     latestTestResult.value = res;
     if (res.ok) {
-      const modelCount = typeof res.details?.modelCount === 'number' ? res.details.modelCount : undefined;
-      const sampleModels = Array.isArray(res.details?.sampleModels) ? (res.details.sampleModels as string[]) : [];
-      message.value = modelCount === undefined ? 'OpenAI connection OK' : `OpenAI connection OK (${modelCount} models found)`;
+      const endpoint = typeof res.details?.endpoint === 'string' ? res.details.endpoint : undefined;
+      const bucketCount = typeof res.details?.bucketCount === 'number' ? res.details.bucketCount : undefined;
+      message.value = bucketCount === undefined ? 'OpenAI connection OK' : `OpenAI usage access OK (${bucketCount} bucket(s) returned)`;
       pushActivity(message.value);
-      if (sampleModels.length > 0) {
-        pushActivity(`Sample models: ${sampleModels.join(', ')}`);
+      if (endpoint) {
+        pushActivity(`Validated endpoint: ${endpoint}`);
       }
     } else {
       message.value = `OpenAI test failed: ${res.message}`;
