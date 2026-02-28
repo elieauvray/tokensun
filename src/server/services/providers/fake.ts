@@ -29,10 +29,28 @@ type FakeModelProfile = {
 };
 
 const PROFILES: FakeModelProfile[] = [
+  // Responses / chat completions
   { model: 'gpt-4o-2024-08-06', dailyRequestsBase: 18, inputPerRequest: 720, outputPerRequest: 290, cacheRatio: 0.22, usdPerReq: 0.0024 },
   { model: 'gpt-4o-mini-2024-07-18', dailyRequestsBase: 44, inputPerRequest: 310, outputPerRequest: 145, cacheRatio: 0.31, usdPerReq: 0.00054 },
+  // Images
+  { model: 'gpt-image-1', dailyRequestsBase: 7, inputPerRequest: 120, outputPerRequest: 0, cacheRatio: 0.04, usdPerReq: 0.0085 },
+  // Web search
+  { model: 'gpt-4o-mini-web-search', dailyRequestsBase: 10, inputPerRequest: 180, outputPerRequest: 60, cacheRatio: 0.08, usdPerReq: 0.0011 },
+  // File search
+  { model: 'gpt-4o-mini-file-search', dailyRequestsBase: 9, inputPerRequest: 210, outputPerRequest: 45, cacheRatio: 0.1, usdPerReq: 0.00095 },
+  // Moderation
+  { model: 'omni-moderation-latest', dailyRequestsBase: 12, inputPerRequest: 460, outputPerRequest: 0, cacheRatio: 0, usdPerReq: 0.00003 },
+  // Embeddings
   { model: 'text-embedding-3-small', dailyRequestsBase: 28, inputPerRequest: 980, outputPerRequest: 0, cacheRatio: 0, usdPerReq: 0.00008 },
-  { model: 'omni-moderation-latest', dailyRequestsBase: 12, inputPerRequest: 460, outputPerRequest: 0, cacheRatio: 0, usdPerReq: 0.00003 }
+  { model: 'text-embedding-3-large', dailyRequestsBase: 11, inputPerRequest: 1540, outputPerRequest: 0, cacheRatio: 0, usdPerReq: 0.00022 },
+  // Audio speech
+  { model: 'gpt-4o-mini-tts', dailyRequestsBase: 6, inputPerRequest: 250, outputPerRequest: 0, cacheRatio: 0.04, usdPerReq: 0.0017 },
+  // Audio transcriptions
+  { model: 'whisper-1', dailyRequestsBase: 8, inputPerRequest: 330, outputPerRequest: 0, cacheRatio: 0, usdPerReq: 0.0012 },
+  // Vector stores
+  { model: 'vector-store-search', dailyRequestsBase: 5, inputPerRequest: 510, outputPerRequest: 0, cacheRatio: 0, usdPerReq: 0.0008 },
+  // Code interpreter sessions
+  { model: 'code-interpreter-session', dailyRequestsBase: 4, inputPerRequest: 420, outputPerRequest: 160, cacheRatio: 0.06, usdPerReq: 0.0064 }
 ];
 
 function dayStartUtc(date: Date): Date {
@@ -119,7 +137,7 @@ export function fetchFakeUsage(connection: ConnectionRecord, start: string, end:
         projectId,
         userId: `user_fake_${(modelIndex % 3) + 1}`,
         apiKeyId: 'key_fake_primary',
-        batch: modelIndex === 2 ? true : false,
+        batch: modelIndex % 4 === 0,
         inputTokens,
         inputCachedTokens: cachedTokens,
         inputAudioTokens: 0,
