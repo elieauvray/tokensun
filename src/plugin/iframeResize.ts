@@ -1,8 +1,9 @@
 import type { Router } from 'vue-router';
 
 const RESIZE_TOPIC = 'PLUGIN_TOPIC_RESIZE_IFRAME';
+const VIEW_LOADED_TOPIC = 'PLUGIN_TOPIC_VIEW_LOADED';
 const MAX_HEIGHT_SESSION_KEY = 'tokensun.iframe.maxHeight';
-const MIN_IFRAME_HEIGHT = 1800;
+const MIN_IFRAME_HEIGHT = 2600;
 
 function measureContentHeight(): number {
   const body = document.body;
@@ -18,7 +19,23 @@ function postResize(height: number): void {
     { topic: RESIZE_TOPIC, data: { height } },
     { type: RESIZE_TOPIC, data: { height } },
     { topic: RESIZE_TOPIC, height },
-    { type: RESIZE_TOPIC, height }
+    { type: RESIZE_TOPIC, height },
+    { topic: RESIZE_TOPIC, payload: { height } },
+    { type: RESIZE_TOPIC, payload: { height } },
+    { topic: RESIZE_TOPIC, value: { height } },
+    { type: RESIZE_TOPIC, value: { height } }
+  ];
+  for (const payload of payloads) {
+    window.parent?.postMessage(payload, '*');
+  }
+}
+
+function postViewLoaded(): void {
+  const payloads: unknown[] = [
+    { topic: VIEW_LOADED_TOPIC },
+    { type: VIEW_LOADED_TOPIC },
+    { topic: VIEW_LOADED_TOPIC, data: {} },
+    { type: VIEW_LOADED_TOPIC, data: {} }
   ];
   for (const payload of payloads) {
     window.parent?.postMessage(payload, '*');
@@ -60,16 +77,21 @@ export function initIframeAutoResize(router: Router): void {
   window.addEventListener('orientationchange', schedule, { passive: true });
 
   router.afterEach(() => {
+    postViewLoaded();
     schedule();
     window.setTimeout(schedule, 80);
     window.setTimeout(schedule, 260);
   });
 
   // Initial kicks for async UI hydration and chart/layout calculations.
+  postViewLoaded();
   schedule();
   window.setTimeout(schedule, 0);
   window.setTimeout(schedule, 80);
   window.setTimeout(schedule, 260);
   window.setTimeout(schedule, 600);
   window.setTimeout(schedule, 1200);
+  window.setTimeout(postViewLoaded, 80);
+  window.setTimeout(postViewLoaded, 260);
+  window.setTimeout(postViewLoaded, 600);
 }
