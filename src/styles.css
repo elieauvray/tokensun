@@ -20,7 +20,7 @@ html,
 body,
 #app {
   width: 100%;
-  min-height: 100%;
+  min-height: max(100%, var(--tokensun-iframe-min-height, 100%));
   height: auto;
 }
 
@@ -32,7 +32,7 @@ body {
 
 .console-layout {
   width: 100%;
-  min-height: 100vh;
+  min-height: max(100vh, var(--tokensun-iframe-min-height, 100vh));
   height: auto;
   display: grid;
   grid-template-rows: 56px 1fr;

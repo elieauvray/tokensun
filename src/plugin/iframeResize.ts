@@ -1,7 +1,7 @@
 import type { Router } from 'vue-router';
 
-const RESIZE_TOPIC = 'PLUGIN_TOPIC_RESIZE_IFRAME';
-const VIEW_LOADED_TOPIC = 'PLUGIN_TOPIC_VIEW_LOADED';
+const RESIZE_TOPICS = ['PLUGIN_TOPIC_RESIZE_IFRAME', 'PLUGINS_RESIZE_IFRAME'] as const;
+const VIEW_LOADED_TOPICS = ['PLUGIN_TOPIC_VIEW_LOADED', 'VIEW_LOADED'] as const;
 const MAX_HEIGHT_SESSION_KEY = 'tokensun.iframe.maxHeight';
 const MIN_IFRAME_HEIGHT = 8200;
 
@@ -15,30 +15,34 @@ function measureContentHeight(): number {
 }
 
 function postResize(height: number): void {
-  const payloads: unknown[] = [
-    { topic: RESIZE_TOPIC, data: { height } },
-    { type: RESIZE_TOPIC, data: { height } },
-    { topic: RESIZE_TOPIC, height },
-    { type: RESIZE_TOPIC, height },
-    { topic: RESIZE_TOPIC, payload: { height } },
-    { type: RESIZE_TOPIC, payload: { height } },
-    { topic: RESIZE_TOPIC, value: { height } },
-    { type: RESIZE_TOPIC, value: { height } }
-  ];
-  for (const payload of payloads) {
-    window.parent?.postMessage(payload, '*');
+  for (const topic of RESIZE_TOPICS) {
+    const payloads: unknown[] = [
+      { topic, data: { height } },
+      { type: topic, data: { height } },
+      { topic, height },
+      { type: topic, height },
+      { topic, payload: { height } },
+      { type: topic, payload: { height } },
+      { topic, value: { height } },
+      { type: topic, value: { height } }
+    ];
+    for (const payload of payloads) {
+      window.parent?.postMessage(payload, '*');
+    }
   }
 }
 
 function postViewLoaded(): void {
-  const payloads: unknown[] = [
-    { topic: VIEW_LOADED_TOPIC },
-    { type: VIEW_LOADED_TOPIC },
-    { topic: VIEW_LOADED_TOPIC, data: {} },
-    { type: VIEW_LOADED_TOPIC, data: {} }
-  ];
-  for (const payload of payloads) {
-    window.parent?.postMessage(payload, '*');
+  for (const topic of VIEW_LOADED_TOPICS) {
+    const payloads: unknown[] = [
+      { topic },
+      { type: topic },
+      { topic, data: {} },
+      { type: topic, data: {} }
+    ];
+    for (const payload of payloads) {
+      window.parent?.postMessage(payload, '*');
+    }
   }
 }
 
