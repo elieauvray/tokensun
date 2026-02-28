@@ -15,7 +15,11 @@
             <label v-for="connection in availableConnections" :key="connection.id" class="provider-filter">
               <input v-model="selectedConnectionIds" type="checkbox" :value="connection.id" />
               <span class="provider-dot" :style="{ backgroundColor: connectionColor(connection.id) }"></span>
-              <span>{{ connectionLabel(connection) }}</span>
+              <span>{{ providerLabel(connection.provider) }}</span>
+              <button type="button" class="provider-info-btn" @click.stop.prevent="toggleConnectionInfo(connection.id)">i</button>
+              <span v-if="activeInfoConnectionId === connection.id" class="provider-info-popover">
+                Project ID: {{ connectionProjectId(connection.id) }}
+              </span>
             </label>
           </div>
 
@@ -102,16 +106,24 @@
             <span>{{ compact(card.requests) }} requests</span>
             <span>{{ compact(card.secondaryValue) }} {{ card.secondaryLabel }}</span>
           </p>
+          <div v-if="card.series.length > 1" class="cap-series">
+            <span v-for="series in card.series" :key="`${card.key}-${series.connectionId}`" class="cap-series-item">
+              <span class="cap-tooltip-dot" :style="{ backgroundColor: series.color }"></span>
+              <span>{{ series.label }}</span>
+            </span>
+          </div>
           <div class="cap-chart" @mouseleave="hideCardTooltip(card.key)">
             <div class="cap-line"></div>
-            <button
-              v-for="point in card.points"
-              :key="`${card.key}-${point.date}`"
-              type="button"
-              class="cap-stick cap-stick-hit"
-              :style="{ left: `${point.left}%`, height: `${point.height}px`, backgroundColor: card.color }"
-              @mouseenter="showCardTooltip($event, card.key, card.title, point.date, point.value, 'number', card.color)"
-            ></button>
+            <template v-for="series in card.series" :key="`${card.key}-${series.connectionId}-sticks`">
+              <button
+                v-for="point in series.points"
+                :key="`${card.key}-${series.connectionId}-${point.date}`"
+                type="button"
+                class="cap-stick cap-stick-hit"
+                :style="{ left: `${point.left}%`, height: `${point.height}px`, backgroundColor: series.color }"
+                @mouseenter="showCardTooltip($event, card.key, `${card.title} (${series.label})`, point.date, point.value, 'number', series.color)"
+              ></button>
+            </template>
           </div>
           <footer class="cap-foot">
             <span>{{ shortDate(filters.start) }}</span>
@@ -137,16 +149,24 @@
             <span>{{ usd(card.total) }} total</span>
           </p>
           <p class="cap-strong">{{ usd(card.peak) }}</p>
+          <div v-if="card.series.length > 1" class="cap-series">
+            <span v-for="series in card.series" :key="`${card.key}-${series.connectionId}`" class="cap-series-item">
+              <span class="cap-tooltip-dot" :style="{ backgroundColor: series.color }"></span>
+              <span>{{ series.label }}</span>
+            </span>
+          </div>
           <div class="cap-chart" @mouseleave="hideCardTooltip(card.key)">
             <div class="cap-line"></div>
-            <button
-              v-for="point in card.points"
-              :key="`${card.key}-${point.date}`"
-              type="button"
-              class="cap-stick cap-stick-hit"
-              :style="{ left: `${point.left}%`, height: `${point.height}px`, backgroundColor: card.color }"
-              @mouseenter="showCardTooltip($event, card.key, card.title, point.date, point.value, 'currency', card.color)"
-            ></button>
+            <template v-for="series in card.series" :key="`${card.key}-${series.connectionId}-sticks`">
+              <button
+                v-for="point in series.points"
+                :key="`${card.key}-${series.connectionId}-${point.date}`"
+                type="button"
+                class="cap-stick cap-stick-hit"
+                :style="{ left: `${point.left}%`, height: `${point.height}px`, backgroundColor: series.color }"
+                @mouseenter="showCardTooltip($event, card.key, `${card.title} (${series.label})`, point.date, point.value, 'currency', series.color)"
+              ></button>
+            </template>
           </div>
           <footer class="cap-foot">
             <span>{{ shortDate(filters.start) }}</span>
@@ -222,6 +242,13 @@ type HoverTooltip = {
   left: number;
 };
 
+type MiniSeries = {
+  connectionId: string;
+  label: string;
+  color: string;
+  points: MiniPoint[];
+};
+
 type ProviderKey = 'openai' | 'fake' | 'anthropic' | 'gemini' | 'mistral';
 
 type CapabilityKey =
@@ -261,6 +288,7 @@ const refreshing = ref(false);
 const querying = ref(false);
 const hasConnections = ref(true);
 const hoverTooltip = ref<HoverTooltip | null>(null);
+const activeInfoConnectionId = ref<string | null>(null);
 
 const presets = [
   { label: 'Week to date', value: 'wtd' },
@@ -324,6 +352,7 @@ function clearDashboardCache() {
   hoverTooltip.value = null;
   availableConnections.value = [];
   selectedConnectionIds.value = [];
+  activeInfoConnectionId.value = null;
   localStorage.removeItem(DASHBOARD_CACHE_KEY);
 }
 
@@ -430,6 +459,15 @@ function connectionLabelById(connectionId: string): string {
   return connectionLabel(connection);
 }
 
+function connectionProjectId(connectionId: string): string {
+  const connection = connectionById.value.get(connectionId);
+  return connection?.config?.openaiProject?.trim() || 'not set';
+}
+
+function toggleConnectionInfo(connectionId: string) {
+  activeInfoConnectionId.value = activeInfoConnectionId.value === connectionId ? null : connectionId;
+}
+
 function tooltipDateLabel(isoDay: string): string {
   const d = new Date(`${isoDay}T00:00:00.000Z`);
   return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} UTC`;
@@ -464,6 +502,20 @@ function buildMiniPoints(byDay: Map<string, number>): MiniPoint[] {
       height: Math.max(4, Math.round(ratio * 84))
     };
   });
+}
+
+function buildSeries(byConnection: Map<string, Map<string, number>>): MiniSeries[] {
+  return selectedConnectionIds.value
+    .filter((connectionId) => byConnection.has(connectionId))
+    .map((connectionId) => {
+      const byDay = byConnection.get(connectionId)!;
+      return {
+        connectionId,
+        label: connectionLabelById(connectionId),
+        color: connectionColor(connectionId),
+        points: buildMiniPoints(byDay)
+      };
+    });
 }
 
 function showCardTooltip(
@@ -548,6 +600,9 @@ async function loadConnectionContext() {
     }
     availableConnections.value = supportedConnections;
     const availableIds = new Set(supportedConnections.map((c) => c.id));
+    if (activeInfoConnectionId.value && !availableIds.has(activeInfoConnectionId.value)) {
+      activeInfoConnectionId.value = null;
+    }
     if (selectedConnectionIds.value.length === 0) {
       selectedConnectionIds.value = supportedConnections.map((c) => c.id);
     } else {
@@ -702,8 +757,7 @@ const capabilityCards = computed(() => {
       secondaryLabel: string;
       requests: number;
       secondaryValue: number;
-      byDay: Map<string, number>;
-      color: string;
+      byConnection: Map<string, Map<string, number>>;
     }
   >();
 
@@ -722,32 +776,35 @@ const capabilityCards = computed(() => {
 
   for (const row of rows.value) {
     const capKey = capabilityOf(row.model);
-    const key = `${row.connectionId}:${capKey}`;
+    const key = capKey;
     if (!map.has(key)) {
       map.set(key, {
         key,
-        title: `${capabilityMeta[capKey].title} (${connectionLabelById(row.connectionId)})`,
+        title: capabilityMeta[capKey].title,
         secondaryLabel: capabilityMeta[capKey].secondaryLabel,
         requests: 0,
         secondaryValue: 0,
-        byDay: new Map(),
-        color: connectionColor(row.connectionId)
+        byConnection: new Map()
       });
     }
     const item = map.get(key)!;
     item.requests += Number(row.numModelRequests || 0);
     item.secondaryValue += Number(row.inputTokens || 0);
     const day = row.bucketStart.slice(0, 10);
-    item.byDay.set(day, (item.byDay.get(day) ?? 0) + Number(row.numModelRequests || 0));
+    if (!item.byConnection.has(row.connectionId)) {
+      item.byConnection.set(row.connectionId, new Map());
+    }
+    const seriesByDay = item.byConnection.get(row.connectionId)!;
+    seriesByDay.set(day, (seriesByDay.get(day) ?? 0) + Number(row.numModelRequests || 0));
   }
 
   return [...map.values()]
-    .map((item) => ({ ...item, points: buildMiniPoints(item.byDay) }))
+    .map((item) => ({ ...item, series: buildSeries(item.byConnection) }))
     .sort((a, b) => b.requests - a.requests);
 });
 
 const spendCards = computed(() => {
-  const map = new Map<string, { title: string; total: number; peak: number; markerPercent: number; byDay: Map<string, number>; color: string }>();
+  const map = new Map<string, { title: string; total: number; peak: number; byConnection: Map<string, Map<string, number>> }>();
 
   for (const row of rows.value) {
     const totalToken = Math.max(1, Number(row.inputTokens || 0) + Number(row.inputCachedTokens || 0) + Number(row.outputTokens || 0));
@@ -761,22 +818,23 @@ const spendCards = computed(() => {
     for (const piece of pieces) {
       if (piece.tokens <= 0) continue;
       const partialCost = (Number(row.costUsd || 0) * piece.tokens) / totalToken;
-      const provider = row.provider as ProviderKey;
-      const key = `${row.connectionId}|${provider}|${row.model}|${piece.label}`;
+      const key = `${row.provider}|${row.model}|${piece.label}`;
       if (!map.has(key)) {
         map.set(key, {
-          title: `${connectionLabelById(row.connectionId)} · ${row.model}, ${piece.label}`,
+          title: `${providerLabel(row.provider)} · ${row.model}, ${piece.label}`,
           total: 0,
           peak: 0,
-          markerPercent: 75,
-          byDay: new Map(),
-          color: connectionColor(row.connectionId)
+          byConnection: new Map()
         });
       }
       const item = map.get(key)!;
       item.total += partialCost;
-      const dayValue = (item.byDay.get(day) ?? 0) + partialCost;
-      item.byDay.set(day, dayValue);
+      if (!item.byConnection.has(row.connectionId)) {
+        item.byConnection.set(row.connectionId, new Map());
+      }
+      const seriesByDay = item.byConnection.get(row.connectionId)!;
+      const dayValue = (seriesByDay.get(day) ?? 0) + partialCost;
+      seriesByDay.set(day, dayValue);
       item.peak = Math.max(item.peak, dayValue);
     }
   }
@@ -788,8 +846,7 @@ const spendCards = computed(() => {
         title: item.title,
         total: Number(item.total.toFixed(6)),
         peak: Number(item.peak.toFixed(6)),
-        color: item.color,
-        points: buildMiniPoints(item.byDay)
+        series: buildSeries(item.byConnection)
       };
     })
     .sort((a, b) => b.total - a.total);
@@ -913,6 +970,7 @@ onBeforeUnmount(() => {
   color: #374151;
   font-size: 12px;
   font-weight: 600;
+  position: relative;
 }
 
 .provider-filter input {
@@ -923,6 +981,36 @@ onBeforeUnmount(() => {
   width: 8px;
   height: 8px;
   border-radius: 999px;
+}
+
+.provider-info-btn {
+  width: 16px;
+  height: 16px;
+  border: 1px solid #9ca3af;
+  border-radius: 50%;
+  background: #fff;
+  color: #6b7280;
+  font-size: 11px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.provider-info-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: #111827;
+  color: #f9fafb;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 6px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+  z-index: 20;
 }
 
 .range-trigger {
@@ -1186,6 +1274,21 @@ onBeforeUnmount(() => {
   color: #666c82;
   font-size: 16px;
   flex-wrap: wrap;
+}
+
+.cap-series {
+  margin-top: 6px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: #5f657d;
+  font-size: 12px;
+}
+
+.cap-series-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .cap-strong {
