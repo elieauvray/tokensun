@@ -68,12 +68,41 @@
           <article class="usage-side-card">
             <p class="usage-side-label">Total tokens</p>
             <p class="usage-side-value">{{ compact(totalTokens) }}</p>
-            <div class="usage-side-line usage-side-line-tokens"></div>
+            <div class="usage-spark" @mousemove="onTokenSparkMove" @mouseleave="tokenHoverIndex = null">
+              <svg viewBox="0 0 100 34" preserveAspectRatio="none">
+                <polyline class="usage-spark-line usage-spark-line-input" :points="tokenInputPolyline" />
+                <polyline class="usage-spark-line usage-spark-line-output" :points="tokenOutputPolyline" />
+                <line v-if="tokenHoverIndex !== null" class="usage-spark-hover-line" :x1="sparkX(tokenHoverIndex, dailyTrend.days.length)" y1="2" :x2="sparkX(tokenHoverIndex, dailyTrend.days.length)" y2="32" />
+              </svg>
+              <div v-if="tokenHoverIndex !== null" class="usage-spark-tooltip" :style="{ left: `${sparkX(tokenHoverIndex, dailyTrend.days.length)}%` }">
+                <p class="usage-spark-tooltip-date">{{ sparkTooltipDate(dailyTrend.days[tokenHoverIndex]) }}</p>
+                <p class="usage-spark-tooltip-total">{{ compact(dailyTrend.input[tokenHoverIndex] + dailyTrend.output[tokenHoverIndex]) }} completion tokens</p>
+                <div class="usage-spark-tooltip-row">
+                  <span class="usage-spark-dot usage-spark-dot-input"></span>
+                  <span>Input</span>
+                  <span>{{ compact(dailyTrend.input[tokenHoverIndex]) }}</span>
+                </div>
+                <div class="usage-spark-tooltip-row">
+                  <span class="usage-spark-dot usage-spark-dot-output"></span>
+                  <span>Output</span>
+                  <span>{{ compact(dailyTrend.output[tokenHoverIndex]) }}</span>
+                </div>
+              </div>
+            </div>
           </article>
           <article class="usage-side-card">
             <p class="usage-side-label">Total requests</p>
             <p class="usage-side-value">{{ compact(totalRequests) }}</p>
-            <div class="usage-side-line"></div>
+            <div class="usage-spark" @mousemove="onRequestSparkMove" @mouseleave="requestHoverIndex = null">
+              <svg viewBox="0 0 100 34" preserveAspectRatio="none">
+                <polyline class="usage-spark-line usage-spark-line-requests" :points="requestPolyline" />
+                <line v-if="requestHoverIndex !== null" class="usage-spark-hover-line" :x1="sparkX(requestHoverIndex, dailyTrend.days.length)" y1="2" :x2="sparkX(requestHoverIndex, dailyTrend.days.length)" y2="32" />
+              </svg>
+              <div v-if="requestHoverIndex !== null" class="usage-spark-tooltip" :style="{ left: `${sparkX(requestHoverIndex, dailyTrend.days.length)}%` }">
+                <p class="usage-spark-tooltip-date">{{ sparkTooltipDate(dailyTrend.days[requestHoverIndex]) }}</p>
+                <p class="usage-spark-tooltip-total">{{ compact(dailyTrend.requests[requestHoverIndex]) }} requests</p>
+              </div>
+            </div>
           </article>
         </aside>
 
@@ -339,6 +368,47 @@ const totalSpend = computed(() => rows.value.reduce((sum, row) => sum + Number(r
 const totalTokens = computed(() => rows.value.reduce((sum, row) => sum + Number(row.totalTokens || 0), 0));
 const totalRequests = computed(() => rows.value.reduce((sum, row) => sum + Number(row.numModelRequests || 0), 0));
 const budgetPercent = computed(() => Math.min(100, (totalSpend.value / monthlyBudgetUsd) * 100));
+const tokenHoverIndex = ref<number | null>(null);
+const requestHoverIndex = ref<number | null>(null);
+
+const dailyTrend = computed(() => {
+  const start = new Date(filters.value.start);
+  const end = new Date(filters.value.end);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start.getTime() > end.getTime()) {
+    return { days: [] as string[], input: [] as number[], output: [] as number[], requests: [] as number[] };
+  }
+
+  const dayCursor = new Date(start);
+  dayCursor.setUTCHours(0, 0, 0, 0);
+  const last = new Date(end);
+  last.setUTCHours(0, 0, 0, 0);
+
+  const days: string[] = [];
+  while (dayCursor.getTime() <= last.getTime()) {
+    days.push(dayCursor.toISOString().slice(0, 10));
+    dayCursor.setUTCDate(dayCursor.getUTCDate() + 1);
+  }
+
+  const indexByDay = new Map(days.map((day, index) => [day, index] as const));
+  const input = new Array(days.length).fill(0);
+  const output = new Array(days.length).fill(0);
+  const requests = new Array(days.length).fill(0);
+
+  for (const row of rows.value) {
+    const day = row.bucketStart.slice(0, 10);
+    const idx = indexByDay.get(day);
+    if (idx === undefined) continue;
+    input[idx] += Number(row.inputTokens || 0);
+    output[idx] += Number(row.outputTokens || 0);
+    requests[idx] += Number(row.numModelRequests || 0);
+  }
+
+  return { days, input, output, requests };
+});
+
+const tokenInputPolyline = computed(() => sparkPolyline(dailyTrend.value.input));
+const tokenOutputPolyline = computed(() => sparkPolyline(dailyTrend.value.output));
+const requestPolyline = computed(() => sparkPolyline(dailyTrend.value.requests));
 
 function persistDashboardCache() {
   const payload = {
@@ -428,6 +498,46 @@ function compact(value: number): string {
 function shortDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+}
+
+function sparkTooltipDate(day: string): string {
+  if (!day) return '';
+  const d = new Date(`${day}T00:00:00.000Z`);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function sparkX(index: number, length: number): number {
+  if (length <= 1) return 50;
+  return (index / (length - 1)) * 100;
+}
+
+function sparkPolyline(values: number[]): string {
+  if (values.length === 0) return '';
+  const max = Math.max(1, ...values);
+  const points = values.map((value, index) => {
+    const x = sparkX(index, values.length);
+    const y = 32 - (value / max) * 28;
+    return `${x},${Math.max(2, Math.min(32, y))}`;
+  });
+  return points.join(' ');
+}
+
+function hoverIndex(event: MouseEvent, pointCount: number): number | null {
+  if (pointCount === 0) return null;
+  const target = event.currentTarget as HTMLElement | null;
+  if (!target) return null;
+  const rect = target.getBoundingClientRect();
+  const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(rect.width, 1)));
+  const idx = Math.round(ratio * Math.max(pointCount - 1, 0));
+  return Math.max(0, Math.min(pointCount - 1, idx));
+}
+
+function onTokenSparkMove(event: MouseEvent) {
+  tokenHoverIndex.value = hoverIndex(event, dailyTrend.value.days.length);
+}
+
+function onRequestSparkMove(event: MouseEvent) {
+  requestHoverIndex.value = hoverIndex(event, dailyTrend.value.days.length);
 }
 
 function providerLabel(provider: ProviderKey): string {
@@ -1207,14 +1317,87 @@ onBeforeUnmount(() => {
   background: linear-gradient(90deg, #f43f5e, #a855f7);
 }
 
-.usage-side-line {
-  margin-top: 30px;
-  border-bottom: 3px dashed #d1d5e5;
+.usage-spark {
+  margin-top: 16px;
+  position: relative;
+  height: 56px;
 }
 
-.usage-side-line-tokens {
-  border-bottom-style: solid;
-  border-bottom-color: #f43f7e;
+.usage-spark svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.usage-spark-line {
+  fill: none;
+  stroke-width: 2.4;
+}
+
+.usage-spark-line-input {
+  stroke: #f59e0b;
+}
+
+.usage-spark-line-output {
+  stroke: #ec4899;
+}
+
+.usage-spark-line-requests {
+  stroke: #6366f1;
+}
+
+.usage-spark-hover-line {
+  stroke: #e5e7eb;
+  stroke-width: 0.8;
+}
+
+.usage-spark-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  width: min(280px, 92vw);
+  background: rgba(17, 24, 39, 0.94);
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 10px;
+  z-index: 8;
+  pointer-events: none;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.35);
+}
+
+.usage-spark-tooltip-date {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.usage-spark-tooltip-total {
+  margin: 6px 0 8px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.usage-spark-tooltip-row {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.usage-spark-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.usage-spark-dot-input {
+  background: #f59e0b;
+}
+
+.usage-spark-dot-output {
+  background: #ec4899;
 }
 
 .usage-tabs {
