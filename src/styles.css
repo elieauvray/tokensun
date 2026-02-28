@@ -74,6 +74,18 @@ body {
   background: #eef3ff;
 }
 
+.console-nav-attention {
+  color: #7c3aed !important;
+  background: #f3e8ff !important;
+  border: 1px solid #c4b5fd;
+  animation: navPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes navPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0); }
+  50% { box-shadow: 0 0 0 6px rgba(124, 58, 237, 0.12); }
+}
+
 .console-main {
   max-width: 1240px;
   width: 100%;

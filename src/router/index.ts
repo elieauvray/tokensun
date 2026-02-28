@@ -5,11 +5,11 @@ import DashboardView from '../views/DashboardView.vue';
 export default createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', redirect: '/connections' },
+    { path: '/', redirect: '/dashboard' },
     {
       path: '/:organizationId/:projectId/:environmentId/',
       redirect: (to) => ({
-        path: '/connections',
+        path: '/dashboard',
         query: {
           organizationId: String(to.params.organizationId ?? ''),
           projectId: String(to.params.projectId ?? ''),

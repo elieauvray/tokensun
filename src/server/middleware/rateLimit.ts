@@ -7,7 +7,7 @@ type Bucket = {
 };
 
 const WINDOW_MS = 60_000;
-const MAX_REQUESTS = 120;
+const MAX_REQUESTS = 600;
 
 const buckets = new Map<string, Bucket>();
 

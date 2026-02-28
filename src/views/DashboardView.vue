@@ -4,15 +4,45 @@
       <h1 class="usage-title">Usage</h1>
       <div class="usage-actions">
         <Dropdown v-model="projectScope" :options="projectOptions" optionLabel="label" optionValue="value" class="usage-select" />
-        <div class="usage-date-pill">
-          <InputText v-model="filters.start" />
-          <span>-</span>
-          <InputText v-model="filters.end" />
-        </div>
-        <Button label="Refresh" :loading="refreshing" :disabled="refreshing || querying" @click="refreshUsage" />
+
+        <button type="button" class="range-trigger" @click="toggleRangePicker">
+          <span class="range-icon">🗓</span>
+          <span>{{ rangeLabel }}</span>
+        </button>
+
+        <Button label="Refresh" :loading="refreshing" :disabled="refreshing || querying || !hasConnections" @click="refreshUsage" />
         <a :href="csvHref" class="usage-export" target="_blank" rel="noreferrer">Export</a>
       </div>
     </header>
+
+    <div v-if="showRangePicker" class="range-popover">
+      <aside class="range-presets">
+        <button v-for="preset in presets" :key="preset.value" type="button" class="preset-btn" @click="applyPreset(preset.value)">
+          {{ preset.label }}
+        </button>
+      </aside>
+      <div class="range-calendar">
+        <Calendar
+          v-model="rangeSelection"
+          selectionMode="range"
+          :inline="true"
+          :numberOfMonths="2"
+          dateFormat="mm/dd/yy"
+          @date-select="onRangeSelect"
+        />
+        <div class="range-footer">
+          <Button label="Apply range" size="small" @click="applyRangeOnly" />
+        </div>
+      </div>
+    </div>
+
+    <article v-if="!hasConnections" class="connect-callout">
+      <div>
+        <h2>No OpenAI connection configured</h2>
+        <p>Create a connection first to load usage and spend data from the OpenAI API.</p>
+      </div>
+      <RouterLink to="/connections" class="connect-callout-btn">Go to Connections</RouterLink>
+    </article>
 
     <p v-if="message" class="usage-msg">{{ message }}</p>
 
@@ -49,11 +79,15 @@
     </section>
 
     <section class="usage-tabs">
-      <button class="usage-tab usage-tab-active" type="button">API capabilities</button>
-      <button class="usage-tab" type="button">Spend categories</button>
+      <button type="button" class="usage-tab" :class="{ 'usage-tab-active': activeTab === 'capabilities' }" @click="activeTab = 'capabilities'">
+        API capabilities
+      </button>
+      <button type="button" class="usage-tab" :class="{ 'usage-tab-active': activeTab === 'spend' }" @click="activeTab = 'spend'">
+        Spend categories
+      </button>
     </section>
 
-    <section class="cap-grid">
+    <section v-if="activeTab === 'capabilities'" class="cap-grid">
       <article v-for="card in capabilityCards" :key="card.key" class="cap-card">
         <header class="cap-head">
           <h3>{{ card.title }}</h3>
@@ -63,23 +97,77 @@
           <span>{{ compact(card.requests) }} requests</span>
           <span>{{ compact(card.secondaryValue) }} {{ card.secondaryLabel }}</span>
         </p>
-        <div class="cap-chart">
+        <div class="cap-chart" @mouseleave="hideCardTooltip(card.key)">
           <div class="cap-line"></div>
-          <div v-if="card.requests > 0" class="cap-stick" :style="{ left: `${card.markerPercent}%` }"></div>
+          <button
+            v-for="point in card.points"
+            :key="`${card.key}-${point.date}`"
+            type="button"
+            class="cap-stick cap-stick-hit"
+            :style="{ left: `${point.left}%`, height: `${point.height}px` }"
+            @mouseenter="showCardTooltip($event, card.key, card.title, point.date, point.value, 'number')"
+          ></button>
         </div>
         <footer class="cap-foot">
           <span>{{ shortDate(filters.start) }}</span>
           <span>{{ shortDate(filters.end) }}</span>
         </footer>
+        <div v-if="hoverTooltip?.cardKey === card.key" class="cap-tooltip" :style="{ left: `${hoverTooltip.left}px` }">
+          <p class="cap-tooltip-date">{{ hoverTooltip.dateLabel }}</p>
+          <div class="cap-tooltip-row">
+            <span class="cap-tooltip-dot"></span>
+            <span class="cap-tooltip-name">{{ hoverTooltip.label }}</span>
+            <span class="cap-tooltip-val">{{ hoverTooltip.valueLabel }}</span>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section v-else class="cap-grid">
+      <article v-for="card in spendCards" :key="card.key" class="cap-card">
+        <header class="cap-head">
+          <h3>{{ card.title }}</h3>
+          <span>›</span>
+        </header>
+        <p class="cap-meta">
+          <span>{{ usd(card.total) }} total</span>
+        </p>
+        <p class="cap-strong">{{ usd(card.peak) }}</p>
+        <div class="cap-chart" @mouseleave="hideCardTooltip(card.key)">
+          <div class="cap-line"></div>
+          <button
+            v-for="point in card.points"
+            :key="`${card.key}-${point.date}`"
+            type="button"
+            class="cap-stick cap-stick-hit"
+            :style="{ left: `${point.left}%`, height: `${point.height}px` }"
+            @mouseenter="showCardTooltip($event, card.key, card.title, point.date, point.value, 'currency')"
+          ></button>
+        </div>
+        <footer class="cap-foot">
+          <span>{{ shortDate(filters.start) }}</span>
+          <span>{{ shortDate(filters.end) }}</span>
+        </footer>
+        <div v-if="hoverTooltip?.cardKey === card.key" class="cap-tooltip" :style="{ left: `${hoverTooltip.left}px` }">
+          <p class="cap-tooltip-date">{{ hoverTooltip.dateLabel }}</p>
+          <div class="cap-tooltip-row">
+            <span class="cap-tooltip-dot"></span>
+            <span class="cap-tooltip-name">{{ hoverTooltip.label }}</span>
+            <span class="cap-tooltip-val">{{ hoverTooltip.valueLabel }}</span>
+          </div>
+        </div>
+      </article>
+      <article v-if="spendCards.length === 0" class="cap-card cap-empty">
+        No spend data for this range.
       </article>
     </section>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import Button from 'primevue/button';
-import InputText from 'primevue/inputtext';
+import Calendar from 'primevue/calendar';
 import Dropdown from 'primevue/dropdown';
 import { Chart, LineController, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Filler } from 'chart.js';
 import { api } from '../components/api';
@@ -90,9 +178,26 @@ type UsageRow = {
   bucketStart: string;
   model: string;
   inputTokens: number;
+  inputCachedTokens: number;
+  outputTokens: number;
   totalTokens: number;
   numModelRequests: number;
   costUsd: number;
+};
+
+type MiniPoint = {
+  date: string;
+  value: number;
+  left: number;
+  height: number;
+};
+
+type HoverTooltip = {
+  cardKey: string;
+  label: string;
+  dateLabel: string;
+  valueLabel: string;
+  left: number;
 };
 
 type CapabilityKey =
@@ -110,27 +215,48 @@ type CapabilityKey =
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 let chart: Chart | null = null;
 
+const monthlyBudgetUsd = 10;
+const DASHBOARD_CACHE_KEY = 'tokensun.dashboard.cache.v1';
+const activeTab = ref<'capabilities' | 'spend'>('capabilities');
+const showRangePicker = ref(false);
+const projectScope = ref('all');
+const projectOptions = [{ label: 'All projects', value: 'all' }];
+
 const now = new Date();
 const ago = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-const filters = reactive({
-  granularity: 'day',
+const rangeSelection = ref<[Date, Date] | null>([ago, now]);
+
+const filters = ref({
   start: ago.toISOString(),
   end: now.toISOString()
 });
 
-const projectScope = ref('all');
-const projectOptions = [{ label: 'All projects', value: 'all' }];
-const monthlyBudgetUsd = 10;
 const rows = ref<UsageRow[]>([]);
 const message = ref('');
 const refreshing = ref(false);
 const querying = ref(false);
+const hasConnections = ref(true);
+const hoverTooltip = ref<HoverTooltip | null>(null);
+
+const presets = [
+  { label: 'Week to date', value: 'wtd' },
+  { label: 'Month to date', value: 'mtd' },
+  { label: 'Last 7 days', value: '7d' },
+  { label: 'Last 14 days', value: '14d' },
+  { label: 'Last 30 days', value: '30d' }
+];
+
+const rangeLabel = computed(() => {
+  const [start, end] = rangeSelection.value ?? [];
+  if (!start || !end) return 'Select range';
+  return `${fmtDate(start)} - ${fmtDate(end)}`;
+});
 
 const csvHref = computed(() => {
   const p = new URLSearchParams();
   p.set('granularity', 'hour');
-  p.set('start', filters.start);
-  p.set('end', filters.end);
+  p.set('start', filters.value.start);
+  p.set('end', filters.value.end);
   p.set('provider', 'openai');
   return `/api/export.csv?${p.toString()}`;
 });
@@ -139,6 +265,56 @@ const totalSpend = computed(() => rows.value.reduce((sum, row) => sum + Number(r
 const totalTokens = computed(() => rows.value.reduce((sum, row) => sum + Number(row.totalTokens || 0), 0));
 const totalRequests = computed(() => rows.value.reduce((sum, row) => sum + Number(row.numModelRequests || 0), 0));
 const budgetPercent = computed(() => Math.min(100, (totalSpend.value / monthlyBudgetUsd) * 100));
+
+function persistDashboardCache() {
+  const payload = {
+    start: filters.value.start,
+    end: filters.value.end,
+    rows: rows.value,
+    activeTab: activeTab.value,
+    projectScope: projectScope.value
+  };
+  localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(payload));
+}
+
+function restoreDashboardCache(): boolean {
+  const raw = localStorage.getItem(DASHBOARD_CACHE_KEY);
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) as {
+      start?: string;
+      end?: string;
+      rows?: UsageRow[];
+      activeTab?: 'capabilities' | 'spend';
+      projectScope?: string;
+    };
+
+    if (parsed.start && parsed.end) {
+      filters.value.start = parsed.start;
+      filters.value.end = parsed.end;
+      rangeSelection.value = [new Date(parsed.start), new Date(parsed.end)];
+    }
+    if (Array.isArray(parsed.rows)) {
+      rows.value = parsed.rows;
+    }
+    if (parsed.activeTab === 'capabilities' || parsed.activeTab === 'spend') {
+      activeTab.value = parsed.activeTab;
+    }
+    if (typeof parsed.projectScope === 'string') {
+      projectScope.value = parsed.projectScope;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function fmtDate(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${mm}/${dd}/${yy}`;
+}
 
 function normalizeModel(value: string): string {
   return String(value || '').toLowerCase();
@@ -159,7 +335,7 @@ function capabilityOf(model: string): CapabilityKey {
 }
 
 function usd(value: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value || 0);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 3 }).format(value || 0);
 }
 
 function compact(value: number): string {
@@ -171,6 +347,11 @@ function shortDate(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
 }
 
+function tooltipDateLabel(isoDay: string): string {
+  const d = new Date(`${isoDay}T00:00:00.000Z`);
+  return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} UTC`;
+}
+
 function formatApiError(err: unknown): string {
   if (!(err instanceof Error)) return 'Request failed';
   try {
@@ -179,6 +360,93 @@ function formatApiError(err: unknown): string {
   } catch {
     return err.message || 'Request failed';
   }
+}
+
+function toggleRangePicker() {
+  showRangePicker.value = !showRangePicker.value;
+}
+
+function buildMiniPoints(byDay: Map<string, number>): MiniPoint[] {
+  const entries = [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b));
+  if (entries.length === 0) return [];
+  const max = Math.max(...entries.map(([, v]) => Number(v || 0)), 0);
+  return entries.map(([date, raw], idx) => {
+    const value = Number(raw || 0);
+    const left = entries.length === 1 ? 50 : (idx / (entries.length - 1)) * 100;
+    const ratio = max > 0 ? value / max : 0;
+    return {
+      date,
+      value,
+      left,
+      height: Math.max(4, Math.round(ratio * 84))
+    };
+  });
+}
+
+function showCardTooltip(
+  event: MouseEvent,
+  cardKey: string,
+  label: string,
+  isoDay: string,
+  value: number,
+  format: 'currency' | 'number'
+) {
+  const target = event.currentTarget as HTMLElement;
+  const card = target.closest('.cap-card') as HTMLElement | null;
+  if (!card) return;
+  const cardRect = card.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const rawLeft = targetRect.left - cardRect.left + targetRect.width / 2;
+  const left = Math.max(140, Math.min(cardRect.width - 140, rawLeft));
+
+  hoverTooltip.value = {
+    cardKey,
+    label,
+    dateLabel: tooltipDateLabel(isoDay),
+    valueLabel: format === 'currency' ? usd(value) : `${compact(value)} requests`,
+    left
+  };
+}
+
+function hideCardTooltip(cardKey: string) {
+  if (hoverTooltip.value?.cardKey === cardKey) hoverTooltip.value = null;
+}
+
+function onRangeSelect() {
+  const [start, end] = rangeSelection.value ?? [];
+  if (!start || !end) return;
+  filters.value.start = start.toISOString();
+  filters.value.end = end.toISOString();
+  persistDashboardCache();
+}
+
+function applyPreset(value: string) {
+  const end = new Date();
+  let start = new Date(end);
+  if (value === 'wtd') {
+    const day = end.getDay();
+    const diff = day === 0 ? 6 : day - 1;
+    start.setDate(end.getDate() - diff);
+    start.setHours(0, 0, 0, 0);
+  } else if (value === 'mtd') {
+    start = new Date(end.getFullYear(), end.getMonth(), 1);
+  } else if (value === '7d') {
+    start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
+  } else if (value === '14d') {
+    start = new Date(end.getTime() - 14 * 24 * 60 * 60 * 1000);
+  } else {
+    start = new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
+  }
+  rangeSelection.value = [start, end];
+  filters.value.start = start.toISOString();
+  filters.value.end = end.toISOString();
+  persistDashboardCache();
+}
+
+function applyRangeOnly() {
+  showRangePicker.value = false;
+  message.value = 'Date range updated. Click Refresh to fetch data for this range.';
+  persistDashboardCache();
 }
 
 function renderChart() {
@@ -205,6 +473,8 @@ function renderChart() {
           fill: true,
           borderWidth: 2,
           pointRadius: 0,
+          pointHitRadius: 18,
+          pointHoverRadius: 5,
           tension: 0.35
         }
       ]
@@ -212,8 +482,34 @@ function renderChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: {
+        mode: 'nearest',
+        intersect: false
+      },
       plugins: {
-        legend: { display: false }
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#ffffff',
+          titleColor: '#374151',
+          bodyColor: '#111827',
+          borderColor: '#d8dbe7',
+          borderWidth: 1,
+          cornerRadius: 10,
+          padding: 10,
+          displayColors: true,
+          callbacks: {
+            title(items) {
+              const first = items[0];
+              const raw = typeof first?.label === 'string' ? first.label : '';
+              if (!raw) return '';
+              return tooltipDateLabel(raw);
+            },
+            label(ctx) {
+              const value = typeof ctx.parsed?.y === 'number' ? ctx.parsed.y : 0;
+              return ` Spend: ${usd(value)}`;
+            }
+          }
+        }
       },
       scales: {
         x: { grid: { display: false } },
@@ -224,17 +520,22 @@ function renderChart() {
 }
 
 async function queryUsage() {
+  if (!hasConnections.value) {
+    rows.value = [];
+    return;
+  }
   if (querying.value) return;
   querying.value = true;
   try {
     const p = new URLSearchParams();
     p.set('granularity', 'hour');
-    p.set('start', filters.start);
-    p.set('end', filters.end);
+    p.set('start', filters.value.start);
+    p.set('end', filters.value.end);
     p.set('provider', 'openai');
 
     const res = await api<{ rows: UsageRow[] }>(`/api/usage/query?${p.toString()}`);
     rows.value = res.rows;
+    persistDashboardCache();
   } catch (err) {
     message.value = `Query failed: ${formatApiError(err)}`;
   } finally {
@@ -243,6 +544,11 @@ async function queryUsage() {
 }
 
 async function refreshUsage() {
+  if (!hasConnections.value) {
+    rows.value = [];
+    message.value = 'No OpenAI connection yet. Go to Connections to create one.';
+    return;
+  }
   if (refreshing.value || querying.value) return;
   refreshing.value = true;
   message.value = 'Refreshing usage...';
@@ -250,8 +556,8 @@ async function refreshUsage() {
     const res = await api<{ ok: boolean; rowsAdded: number; errors?: Array<{ message: string }> }>('/api/usage/refresh', {
       method: 'POST',
       body: JSON.stringify({
-        start: filters.start,
-        end: filters.end
+        start: filters.value.start,
+        end: filters.value.end
       })
     });
     if (res.ok) {
@@ -261,6 +567,7 @@ async function refreshUsage() {
       message.value = `Refresh completed with issue(s): ${details || 'unknown_error'}`;
     }
     await queryUsage();
+    persistDashboardCache();
   } catch (err) {
     message.value = `Refresh failed: ${formatApiError(err)}`;
   } finally {
@@ -271,59 +578,106 @@ async function refreshUsage() {
 const capabilityCards = computed(() => {
   const seed: Record<
     CapabilityKey,
-    { title: string; secondaryLabel: string; requests: number; secondaryValue: number; markerPercent: number }
+    { title: string; secondaryLabel: string; requests: number; secondaryValue: number; byDay: Map<string, number> }
   > = {
-    responses: { title: 'Responses and Chat Completions', secondaryLabel: 'input tokens', requests: 0, secondaryValue: 0, markerPercent: 75 },
-    images: { title: 'Images', secondaryLabel: 'images', requests: 0, secondaryValue: 0, markerPercent: 75 },
-    webSearches: { title: 'Web Searches', secondaryLabel: 'searches', requests: 0, secondaryValue: 0, markerPercent: 75 },
-    fileSearches: { title: 'File Searches', secondaryLabel: 'searches', requests: 0, secondaryValue: 0, markerPercent: 75 },
-    moderation: { title: 'Moderation', secondaryLabel: 'input tokens', requests: 0, secondaryValue: 0, markerPercent: 75 },
-    embeddings: { title: 'Embeddings', secondaryLabel: 'input tokens', requests: 0, secondaryValue: 0, markerPercent: 75 },
-    audioSpeeches: { title: 'Audio Speeches', secondaryLabel: 'characters', requests: 0, secondaryValue: 0, markerPercent: 75 },
-    audioTranscriptions: { title: 'Audio Transcriptions', secondaryLabel: 'seconds', requests: 0, secondaryValue: 0, markerPercent: 75 },
-    vectorStores: { title: 'Vector Stores', secondaryLabel: 'bytes', requests: 0, secondaryValue: 0, markerPercent: 75 },
-    codeInterpreter: { title: 'Code Interpreter Sessions', secondaryLabel: 'sessions', requests: 0, secondaryValue: 0, markerPercent: 75 }
+    responses: { title: 'Responses and Chat Completions', secondaryLabel: 'input tokens', requests: 0, secondaryValue: 0, byDay: new Map() },
+    images: { title: 'Images', secondaryLabel: 'images', requests: 0, secondaryValue: 0, byDay: new Map() },
+    webSearches: { title: 'Web Searches', secondaryLabel: 'searches', requests: 0, secondaryValue: 0, byDay: new Map() },
+    fileSearches: { title: 'File Searches', secondaryLabel: 'searches', requests: 0, secondaryValue: 0, byDay: new Map() },
+    moderation: { title: 'Moderation', secondaryLabel: 'input tokens', requests: 0, secondaryValue: 0, byDay: new Map() },
+    embeddings: { title: 'Embeddings', secondaryLabel: 'input tokens', requests: 0, secondaryValue: 0, byDay: new Map() },
+    audioSpeeches: { title: 'Audio Speeches', secondaryLabel: 'characters', requests: 0, secondaryValue: 0, byDay: new Map() },
+    audioTranscriptions: { title: 'Audio Transcriptions', secondaryLabel: 'seconds', requests: 0, secondaryValue: 0, byDay: new Map() },
+    vectorStores: { title: 'Vector Stores', secondaryLabel: 'bytes', requests: 0, secondaryValue: 0, byDay: new Map() },
+    codeInterpreter: { title: 'Code Interpreter Sessions', secondaryLabel: 'sessions', requests: 0, secondaryValue: 0, byDay: new Map() }
   };
-
-  const byDay = new Map<CapabilityKey, Map<string, number>>();
-  for (const key of Object.keys(seed) as CapabilityKey[]) byDay.set(key, new Map<string, number>());
 
   for (const row of rows.value) {
     const key = capabilityOf(row.model);
     seed[key].requests += Number(row.numModelRequests || 0);
     seed[key].secondaryValue += Number(row.inputTokens || 0);
     const day = row.bucketStart.slice(0, 10);
-    const m = byDay.get(key)!;
+    const m = seed[key].byDay;
     m.set(day, (m.get(day) ?? 0) + Number(row.numModelRequests || 0));
   }
 
-  for (const key of Object.keys(seed) as CapabilityKey[]) {
-    const series = [...byDay.get(key)!.values()];
-    if (series.length > 0) {
-      const idx = series.findIndex((v) => v > 0);
-      if (idx >= 0) {
-        seed[key].markerPercent = Math.max(8, Math.min(94, (idx / Math.max(1, series.length - 1)) * 100));
-      }
-    }
-  }
-
   return [
-    { key: 'responses', ...seed.responses },
-    { key: 'images', ...seed.images },
-    { key: 'webSearches', ...seed.webSearches },
-    { key: 'fileSearches', ...seed.fileSearches },
-    { key: 'moderation', ...seed.moderation },
-    { key: 'embeddings', ...seed.embeddings },
-    { key: 'audioSpeeches', ...seed.audioSpeeches },
-    { key: 'audioTranscriptions', ...seed.audioTranscriptions },
-    { key: 'vectorStores', ...seed.vectorStores },
-    { key: 'codeInterpreter', ...seed.codeInterpreter }
+    { key: 'responses', ...seed.responses, points: buildMiniPoints(seed.responses.byDay) },
+    { key: 'images', ...seed.images, points: buildMiniPoints(seed.images.byDay) },
+    { key: 'webSearches', ...seed.webSearches, points: buildMiniPoints(seed.webSearches.byDay) },
+    { key: 'fileSearches', ...seed.fileSearches, points: buildMiniPoints(seed.fileSearches.byDay) },
+    { key: 'moderation', ...seed.moderation, points: buildMiniPoints(seed.moderation.byDay) },
+    { key: 'embeddings', ...seed.embeddings, points: buildMiniPoints(seed.embeddings.byDay) },
+    { key: 'audioSpeeches', ...seed.audioSpeeches, points: buildMiniPoints(seed.audioSpeeches.byDay) },
+    { key: 'audioTranscriptions', ...seed.audioTranscriptions, points: buildMiniPoints(seed.audioTranscriptions.byDay) },
+    { key: 'vectorStores', ...seed.vectorStores, points: buildMiniPoints(seed.vectorStores.byDay) },
+    { key: 'codeInterpreter', ...seed.codeInterpreter, points: buildMiniPoints(seed.codeInterpreter.byDay) }
   ];
 });
 
+const spendCards = computed(() => {
+  const map = new Map<string, { title: string; total: number; peak: number; markerPercent: number; byDay: Map<string, number> }>();
+
+  for (const row of rows.value) {
+    const totalToken = Math.max(1, Number(row.inputTokens || 0) + Number(row.inputCachedTokens || 0) + Number(row.outputTokens || 0));
+    const day = row.bucketStart.slice(0, 10);
+    const pieces = [
+      { label: 'input', tokens: Number(row.inputTokens || 0) },
+      { label: 'cached input', tokens: Number(row.inputCachedTokens || 0) },
+      { label: 'output', tokens: Number(row.outputTokens || 0) }
+    ];
+
+    for (const piece of pieces) {
+      if (piece.tokens <= 0) continue;
+      const partialCost = (Number(row.costUsd || 0) * piece.tokens) / totalToken;
+      const key = `${row.model}|${piece.label}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          title: `${row.model}, ${piece.label}`,
+          total: 0,
+          peak: 0,
+          markerPercent: 75,
+          byDay: new Map()
+        });
+      }
+      const item = map.get(key)!;
+      item.total += partialCost;
+      const dayValue = (item.byDay.get(day) ?? 0) + partialCost;
+      item.byDay.set(day, dayValue);
+      item.peak = Math.max(item.peak, dayValue);
+    }
+  }
+
+  return [...map.entries()]
+    .map(([key, item]) => {
+      return {
+        key,
+        title: item.title,
+        total: Number(item.total.toFixed(6)),
+        peak: Number(item.peak.toFixed(6)),
+        points: buildMiniPoints(item.byDay)
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+});
+
 watch(rows, renderChart);
+watch(activeTab, persistDashboardCache);
+watch(projectScope, persistDashboardCache);
 onMounted(async () => {
-  await refreshUsage();
+  const restored = restoreDashboardCache();
+  if (restored) {
+    message.value = 'Loaded cached dashboard data. Click Refresh to update from OpenAI.';
+  }
+  try {
+    const res = await api<{ connections: any[] }>('/api/connections');
+    hasConnections.value = Array.isArray(res.connections) && res.connections.length > 0;
+  } catch {
+    hasConnections.value = false;
+  }
+  if (!restored && !hasConnections.value) {
+    message.value = 'No OpenAI connection yet. Go to Connections to create one.';
+  }
 });
 </script>
 
@@ -331,6 +685,7 @@ onMounted(async () => {
 .usage-page {
   display: grid;
   gap: 14px;
+  position: relative;
 }
 
 .usage-topbar {
@@ -363,22 +718,70 @@ onMounted(async () => {
   min-width: 170px;
 }
 
-.usage-date-pill {
+.range-trigger {
+  border: 2px solid #0d6fd6;
+  background: #fff;
+  border-radius: 999px;
+  padding: 10px 16px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  border: 1px solid #e3e6f2;
-  border-radius: 999px;
-  padding: 5px 10px;
-  background: #fafbff;
+  gap: 10px;
+  font-size: 14px;
+  cursor: pointer;
 }
 
-.usage-date-pill :deep(.p-inputtext) {
+.range-icon {
+  font-size: 14px;
+}
+
+.range-popover {
+  position: absolute;
+  top: 76px;
+  right: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  width: min(920px, calc(100vw - 40px));
+  background: #fff;
+  border: 1px solid #dfe4ef;
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.16);
+  overflow: hidden;
+}
+
+.range-presets {
+  border-right: 1px solid #eceef6;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.preset-btn {
+  text-align: left;
   border: 0;
   background: transparent;
-  width: 152px;
-  font-size: 12px;
-  padding: 2px 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.preset-btn:hover {
+  background: #f4f6fc;
+}
+
+.range-calendar {
+  padding: 8px;
+}
+
+.range-calendar :deep(.p-calendar) {
+  width: 100%;
+}
+
+.range-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 4px 2px;
 }
 
 .usage-export {
@@ -395,6 +798,38 @@ onMounted(async () => {
   background: #f5f3ff;
   color: #5b21b6;
   font-size: 12px;
+}
+
+.connect-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid #c4b5fd;
+  background: linear-gradient(90deg, #faf5ff, #f5f3ff);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.connect-callout h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.connect-callout p {
+  margin: 4px 0 0;
+  color: #5b6074;
+  font-size: 13px;
+}
+
+.connect-callout-btn {
+  text-decoration: none;
+  color: #fff;
+  background: #7c3aed;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .usage-main {
@@ -510,13 +945,20 @@ onMounted(async () => {
 }
 
 .cap-card {
+  position: relative;
   border: 1px solid #e5e7ef;
   border-radius: 14px;
   background: #fff;
   padding: 16px;
   min-height: 220px;
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto auto 1fr auto;
+  overflow: hidden;
+}
+
+.cap-empty {
+  font-size: 18px;
+  color: #6b7280;
 }
 
 .cap-head {
@@ -527,13 +969,16 @@ onMounted(async () => {
 
 .cap-head h3 {
   margin: 0;
-  font-size: 30px;
+  font-size: 20px;
   font-weight: 600;
+  line-height: 1.25;
+  max-width: calc(100% - 24px);
+  overflow-wrap: anywhere;
 }
 
 .cap-head span {
   color: #5f6477;
-  font-size: 28px;
+  font-size: 24px;
   line-height: 1;
 }
 
@@ -542,13 +987,24 @@ onMounted(async () => {
   display: flex;
   gap: 14px;
   color: #666c82;
-  font-size: 18px;
+  font-size: 16px;
+  flex-wrap: wrap;
+}
+
+.cap-strong {
+  margin: 6px 0 0;
+  color: #4b5563;
+  font-size: 30px;
 }
 
 .cap-chart {
   position: relative;
+  height: 108px;
+  margin-top: 8px;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  overflow: hidden;
+  padding-bottom: 1px;
 }
 
 .cap-line {
@@ -558,18 +1014,74 @@ onMounted(async () => {
 
 .cap-stick {
   position: absolute;
-  bottom: -1px;
+  bottom: 1px;
   width: 4px;
-  height: 84px;
   border-radius: 2px;
   background: #6d4aff;
+  transform: translateX(-50%);
+}
+
+.cap-stick-hit {
+  border: 0;
+  padding: 0;
+  cursor: pointer;
 }
 
 .cap-foot {
   display: flex;
   justify-content: space-between;
   color: #6f758a;
-  font-size: 30px;
+  font-size: 16px;
+}
+
+.cap-tooltip {
+  position: absolute;
+  top: 86px;
+  transform: translateX(-50%);
+  background: #fff;
+  border: 1px solid #d8dbe7;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+  padding: 10px 12px;
+  width: min(92%, 360px);
+  z-index: 3;
+  pointer-events: none;
+}
+
+.cap-tooltip-date {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.cap-tooltip-row {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid #eceff6;
+  padding-top: 8px;
+}
+
+.cap-tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: #6d4aff;
+}
+
+.cap-tooltip-name {
+  color: #374151;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cap-tooltip-val {
+  color: #111827;
+  font-weight: 600;
+  font-size: 13px;
 }
 
 @media (max-width: 1280px) {
@@ -612,18 +1124,9 @@ onMounted(async () => {
     justify-content: flex-start;
   }
 
-  .usage-date-pill {
-    width: 100%;
-  }
-
-  .usage-date-pill :deep(.p-inputtext) {
-    width: 100%;
-  }
-
   .usage-spend h2,
   .usage-side-value,
-  .cap-head h3,
-  .cap-foot {
+  .cap-strong {
     font-size: 24px;
   }
 
@@ -631,6 +1134,16 @@ onMounted(async () => {
   .usage-side-label,
   .usage-spend p {
     font-size: 14px;
+  }
+
+  .range-popover {
+    position: static;
+    grid-template-columns: 1fr;
+  }
+
+  .range-presets {
+    border-right: 0;
+    border-bottom: 1px solid #eceef6;
   }
 }
 </style>

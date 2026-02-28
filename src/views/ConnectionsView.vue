@@ -24,6 +24,7 @@
         <InputText v-model="form.baseUrl" placeholder="Base URL (optional)" />
         <InputText v-model="form.apiKey" type="password" placeholder="API key" />
         <Button label="Create connection" :loading="creating" :disabled="creating" @click="createConnection" />
+        <Button label="Refresh list" severity="secondary" :disabled="creating || testingId !== null || deletingId !== null" @click="loadConnections" />
       </div>
     </article>
 
@@ -112,6 +113,10 @@ const deletingId = ref<string | null>(null);
 const latestTestResult = ref<any | null>(null);
 const activity = ref<Array<{ id: string; text: string }>>([]);
 
+function emitConnectionsChanged() {
+  window.dispatchEvent(new Event('tokensun:connections-changed'));
+}
+
 function pushActivity(text: string) {
   activity.value.unshift({
     id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
@@ -136,7 +141,8 @@ function formatApiError(err: unknown): string {
 async function loadConnections() {
   try {
     const res = await api<{ connections: any[] }>('/api/connections');
-    connections.value = res.connections.filter((c) => c.provider === 'openai');
+    connections.value = res.connections.filter((c) => c.provider === 'openai').sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    emitConnectionsChanged();
     pushActivity(`Loaded ${connections.value.length} OpenAI connection(s).`);
   } catch (err) {
     message.value = `Failed to load connections: ${formatApiError(err)}`;
@@ -150,7 +156,7 @@ async function createConnection() {
   pushActivity('Creating OpenAI connection...');
   try {
     const fallbackName = `${form.provider.toUpperCase()} connection`;
-    await api('/api/connections', {
+    const created = await api<{ connection: any }>('/api/connections', {
       method: 'POST',
       body: JSON.stringify({
         provider: form.provider,
@@ -164,12 +170,13 @@ async function createConnection() {
       })
     });
 
+    connections.value = [...connections.value, created.connection].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    emitConnectionsChanged();
     form.name = '';
     form.baseUrl = '';
     form.apiKey = '';
     message.value = 'Connection created';
     pushActivity(message.value);
-    await loadConnections();
   } catch (err) {
     message.value = `Create failed: ${formatApiError(err)}`;
     pushActivity(message.value);
@@ -201,7 +208,6 @@ async function testConnection(id: string) {
       message.value = `OpenAI test failed: ${res.message}`;
       pushActivity(message.value);
     }
-    await loadConnections();
   } catch (err) {
     message.value = `Test failed: ${formatApiError(err)}`;
     pushActivity(message.value);
@@ -222,9 +228,10 @@ async function deleteConnection(id: string) {
       pushActivity(message.value);
       return;
     }
+    connections.value = connections.value.filter((c) => c.id !== id);
+    emitConnectionsChanged();
     message.value = 'Connection deleted';
     pushActivity(message.value);
-    await loadConnections();
   } catch (err) {
     message.value = `Delete failed: ${formatApiError(err)}`;
     pushActivity(message.value);
