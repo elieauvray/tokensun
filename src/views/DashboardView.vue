@@ -45,6 +45,7 @@
             selectionMode="range"
             :inline="true"
             :numberOfMonths="2"
+            :maxDate="today"
             dateFormat="mm/dd/yy"
             @date-select="onRangeSelect"
           />
@@ -332,6 +333,7 @@ const selectedConnectionIds = ref<string[]>([]);
 
 const now = new Date();
 const ago = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+const today = new Date();
 const rangeSelection = ref<[Date, Date] | null>([ago, now]);
 
 const filters = ref({
@@ -375,8 +377,6 @@ const rows = computed(() => {
   return allRows.value.filter((row) => allowed.has(row.connectionId));
 });
 
-const allSourceRows = computed(() => allRows.value);
-
 const csvHref = computed(() => {
   const p = new URLSearchParams();
   p.set('granularity', 'hour');
@@ -391,8 +391,8 @@ const csvHref = computed(() => {
 const connectionById = computed(() => new Map(availableConnections.value.map((connection) => [connection.id, connection] as const)));
 
 const totalSpend = computed(() => rows.value.reduce((sum, row) => sum + Number(row.costUsd || 0), 0));
-const totalTokens = computed(() => allSourceRows.value.reduce((sum, row) => sum + Number(row.totalTokens || 0), 0));
-const totalRequests = computed(() => allSourceRows.value.reduce((sum, row) => sum + Number(row.numModelRequests || 0), 0));
+const totalTokens = computed(() => rows.value.reduce((sum, row) => sum + Number(row.totalTokens || 0), 0));
+const totalRequests = computed(() => rows.value.reduce((sum, row) => sum + Number(row.numModelRequests || 0), 0));
 const budgetPercent = computed(() => Math.min(100, (totalSpend.value / monthlyBudgetUsd) * 100));
 const tokenHoverIndex = ref<number | null>(null);
 const requestHoverIndex = ref<number | null>(null);
@@ -423,7 +423,7 @@ const dailyTrend = computed(() => {
   const output = new Array(days.length).fill(0);
   const requests = new Array(days.length).fill(0);
 
-  for (const row of allSourceRows.value) {
+  for (const row of rows.value) {
     const day = row.bucketStart.slice(0, 10);
     const idx = indexByDay.get(day);
     if (idx === undefined) continue;
