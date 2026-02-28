@@ -8,15 +8,7 @@
       (function () {
         var RESIZE_TOPIC = 'PLUGIN_TOPIC_RESIZE_IFRAME';
         var VIEW_LOADED_TOPIC = 'PLUGIN_TOPIC_VIEW_LOADED';
-        var STORAGE_KEY = 'tokensun.iframe.maxHeight';
-        var fallbackMin = Math.max(window.innerHeight || 0, 900);
-        var restoredRaw = Number(sessionStorage.getItem(STORAGE_KEY) || 0);
-        if (restoredRaw > 4000) {
-          sessionStorage.removeItem(STORAGE_KEY);
-          restoredRaw = 0;
-        }
-        var restored = restoredRaw;
-        var target = Math.max(fallbackMin, Number.isFinite(restored) ? restored : 0);
+        var target = Math.max(window.innerHeight || 0, 1200);
 
         function post(topic, height) {
           if (height != null) {

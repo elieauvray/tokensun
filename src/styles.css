@@ -47,20 +47,21 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 18px;
+  min-height: 66px;
+  padding: 10px 22px;
 }
 
 .console-title {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 14px;
+  gap: 12px;
+  font-size: 24px;
   font-weight: 700;
 }
 
 .console-title-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
   background: var(--ups-primary);
 }
@@ -73,10 +74,10 @@ body {
 .console-nav a {
   color: #334155;
   text-decoration: none;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
-  padding: 8px 10px;
-  border-radius: 6px;
+  padding: 10px 14px;
+  border-radius: 8px;
 }
 
 .console-nav a.router-link-active {
@@ -98,7 +99,7 @@ body {
 
 .console-main {
   width: 100%;
-  min-height: calc(100vh - 56px);
+  min-height: calc(100vh - 66px);
   flex: 1 0 auto;
   margin: 0;
   padding: 12px;

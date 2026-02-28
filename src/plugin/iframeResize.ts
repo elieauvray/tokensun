@@ -2,8 +2,7 @@ import type { Router } from 'vue-router';
 
 const RESIZE_TOPICS = ['PLUGIN_TOPIC_RESIZE_IFRAME', 'PLUGINS_RESIZE_IFRAME'] as const;
 const VIEW_LOADED_TOPICS = ['PLUGIN_TOPIC_VIEW_LOADED', 'VIEW_LOADED'] as const;
-const MAX_HEIGHT_SESSION_KEY = 'tokensun.iframe.maxHeight';
-const MIN_IFRAME_HEIGHT = 900;
+const MIN_IFRAME_HEIGHT = 1200;
 
 function measureContentHeight(): number {
   const body = document.body;
@@ -51,22 +50,17 @@ function postViewLoaded(): void {
 }
 
 export function initIframeAutoResize(router: Router): void {
-  const restoredRaw = Number(sessionStorage.getItem(MAX_HEIGHT_SESSION_KEY) || 0);
-  const restoredMax = restoredRaw > 4000 ? 0 : restoredRaw;
-  if (restoredRaw > 4000) sessionStorage.removeItem(MAX_HEIGHT_SESSION_KEY);
-  let maxHeightSeen = Number.isFinite(restoredMax) ? Math.max(0, restoredMax) : 0;
   let lastPostedHeight = 0;
   let raf = 0;
+  let pollTimer = 0;
 
   const flush = () => {
     raf = 0;
     const measured = measureContentHeight();
-    const stableTarget = Math.max(MIN_IFRAME_HEIGHT, measured, maxHeightSeen);
-    maxHeightSeen = stableTarget;
-    sessionStorage.setItem(MAX_HEIGHT_SESSION_KEY, String(maxHeightSeen));
-    if (stableTarget !== lastPostedHeight) {
-      lastPostedHeight = stableTarget;
-      postResize(stableTarget);
+    const target = Math.max(MIN_IFRAME_HEIGHT, measured);
+    if (Math.abs(target - lastPostedHeight) > 1) {
+      lastPostedHeight = target;
+      postResize(target);
     }
   };
 
@@ -93,6 +87,8 @@ export function initIframeAutoResize(router: Router): void {
     window.setTimeout(schedule, 260);
   });
 
+  document.addEventListener('visibilitychange', schedule);
+
   // Initial kicks for async UI hydration and chart/layout calculations.
   postViewLoaded();
   schedule();
@@ -104,4 +100,11 @@ export function initIframeAutoResize(router: Router): void {
   window.setTimeout(postViewLoaded, 80);
   window.setTimeout(postViewLoaded, 260);
   window.setTimeout(postViewLoaded, 600);
+
+  // Safety net for host resizing race conditions on tab switches.
+  pollTimer = window.setInterval(schedule, 400);
+  window.setTimeout(() => {
+    window.clearInterval(pollTimer);
+    pollTimer = 0;
+  }, 20000);
 }
