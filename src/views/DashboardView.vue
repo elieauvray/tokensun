@@ -68,13 +68,13 @@
           <article class="usage-side-card">
             <p class="usage-side-label">Total tokens</p>
             <p class="usage-side-value">{{ compact(totalTokens) }}</p>
-            <div class="usage-spark" @mousemove="onTokenSparkMove" @mouseleave="tokenHoverIndex = null">
+            <div class="usage-spark" @mousemove="onTokenSparkMove" @mouseleave="clearTokenSparkHover">
               <svg viewBox="0 0 100 34" preserveAspectRatio="none">
                 <polyline class="usage-spark-line usage-spark-line-input" :points="tokenInputPolyline" />
                 <polyline class="usage-spark-line usage-spark-line-output" :points="tokenOutputPolyline" />
                 <line v-if="tokenHoverIndex !== null" class="usage-spark-hover-line" :x1="sparkX(tokenHoverIndex, dailyTrend.days.length)" y1="2" :x2="sparkX(tokenHoverIndex, dailyTrend.days.length)" y2="32" />
               </svg>
-              <div v-if="tokenHoverIndex !== null" class="usage-spark-tooltip" :style="{ left: `${sparkX(tokenHoverIndex, dailyTrend.days.length)}%` }">
+              <div v-if="tokenHoverIndex !== null" class="usage-spark-tooltip" :style="tokenTooltipStyle">
                 <p class="usage-spark-tooltip-date">{{ sparkTooltipDate(dailyTrend.days[tokenHoverIndex]) }}</p>
                 <p class="usage-spark-tooltip-total">{{ compact(dailyTrend.input[tokenHoverIndex] + dailyTrend.output[tokenHoverIndex]) }} completion tokens</p>
                 <div class="usage-spark-tooltip-row">
@@ -93,12 +93,12 @@
           <article class="usage-side-card">
             <p class="usage-side-label">Total requests</p>
             <p class="usage-side-value">{{ compact(totalRequests) }}</p>
-            <div class="usage-spark" @mousemove="onRequestSparkMove" @mouseleave="requestHoverIndex = null">
+            <div class="usage-spark" @mousemove="onRequestSparkMove" @mouseleave="clearRequestSparkHover">
               <svg viewBox="0 0 100 34" preserveAspectRatio="none">
                 <polyline class="usage-spark-line usage-spark-line-requests" :points="requestPolyline" />
                 <line v-if="requestHoverIndex !== null" class="usage-spark-hover-line" :x1="sparkX(requestHoverIndex, dailyTrend.days.length)" y1="2" :x2="sparkX(requestHoverIndex, dailyTrend.days.length)" y2="32" />
               </svg>
-              <div v-if="requestHoverIndex !== null" class="usage-spark-tooltip" :style="{ left: `${sparkX(requestHoverIndex, dailyTrend.days.length)}%` }">
+              <div v-if="requestHoverIndex !== null" class="usage-spark-tooltip" :style="requestTooltipStyle">
                 <p class="usage-spark-tooltip-date">{{ sparkTooltipDate(dailyTrend.days[requestHoverIndex]) }}</p>
                 <p class="usage-spark-tooltip-total">{{ compact(dailyTrend.requests[requestHoverIndex]) }} requests</p>
               </div>
@@ -160,7 +160,7 @@
             <span>{{ shortDate(filters.start) }}</span>
             <span>{{ shortDate(filters.end) }}</span>
           </footer>
-          <div v-if="hoverTooltip?.cardKey === card.key" class="cap-tooltip" :style="{ left: `${hoverTooltip.left}px` }">
+          <div v-if="hoverTooltip?.cardKey === card.key" class="cap-tooltip" :style="{ left: `${hoverTooltip.left}px`, top: `${hoverTooltip.top}px` }">
             <p class="cap-tooltip-date">{{ hoverTooltip.dateLabel }}</p>
             <div class="cap-tooltip-row">
               <span class="cap-tooltip-dot" :style="{ backgroundColor: hoverTooltip.color }"></span>
@@ -205,7 +205,7 @@
             <span>{{ shortDate(filters.start) }}</span>
             <span>{{ shortDate(filters.end) }}</span>
           </footer>
-          <div v-if="hoverTooltip?.cardKey === card.key" class="cap-tooltip" :style="{ left: `${hoverTooltip.left}px` }">
+          <div v-if="hoverTooltip?.cardKey === card.key" class="cap-tooltip" :style="{ left: `${hoverTooltip.left}px`, top: `${hoverTooltip.top}px` }">
             <p class="cap-tooltip-date">{{ hoverTooltip.dateLabel }}</p>
             <div class="cap-tooltip-row">
               <span class="cap-tooltip-dot" :style="{ backgroundColor: hoverTooltip.color }"></span>
@@ -273,6 +273,7 @@ type HoverTooltip = {
   valueLabel: string;
   color: string;
   left: number;
+  top: number;
 };
 
 type MiniSeries = {
@@ -351,6 +352,8 @@ const rows = computed(() => {
   return allRows.value.filter((row) => allowed.has(row.connectionId));
 });
 
+const allSourceRows = computed(() => allRows.value);
+
 const csvHref = computed(() => {
   const p = new URLSearchParams();
   p.set('granularity', 'hour');
@@ -365,11 +368,13 @@ const csvHref = computed(() => {
 const connectionById = computed(() => new Map(availableConnections.value.map((connection) => [connection.id, connection] as const)));
 
 const totalSpend = computed(() => rows.value.reduce((sum, row) => sum + Number(row.costUsd || 0), 0));
-const totalTokens = computed(() => rows.value.reduce((sum, row) => sum + Number(row.totalTokens || 0), 0));
-const totalRequests = computed(() => rows.value.reduce((sum, row) => sum + Number(row.numModelRequests || 0), 0));
+const totalTokens = computed(() => allSourceRows.value.reduce((sum, row) => sum + Number(row.totalTokens || 0), 0));
+const totalRequests = computed(() => allSourceRows.value.reduce((sum, row) => sum + Number(row.numModelRequests || 0), 0));
 const budgetPercent = computed(() => Math.min(100, (totalSpend.value / monthlyBudgetUsd) * 100));
 const tokenHoverIndex = ref<number | null>(null);
 const requestHoverIndex = ref<number | null>(null);
+const tokenTooltipPos = ref<{ left: number; top: number } | null>(null);
+const requestTooltipPos = ref<{ left: number; top: number } | null>(null);
 
 const dailyTrend = computed(() => {
   const start = new Date(filters.value.start);
@@ -394,7 +399,7 @@ const dailyTrend = computed(() => {
   const output = new Array(days.length).fill(0);
   const requests = new Array(days.length).fill(0);
 
-  for (const row of rows.value) {
+  for (const row of allSourceRows.value) {
     const day = row.bucketStart.slice(0, 10);
     const idx = indexByDay.get(day);
     if (idx === undefined) continue;
@@ -409,6 +414,20 @@ const dailyTrend = computed(() => {
 const tokenInputPolyline = computed(() => sparkPolyline(dailyTrend.value.input));
 const tokenOutputPolyline = computed(() => sparkPolyline(dailyTrend.value.output));
 const requestPolyline = computed(() => sparkPolyline(dailyTrend.value.requests));
+const tokenTooltipStyle = computed(() => {
+  if (!tokenTooltipPos.value) return {};
+  return {
+    left: `${tokenTooltipPos.value.left}px`,
+    top: `${tokenTooltipPos.value.top}px`
+  };
+});
+const requestTooltipStyle = computed(() => {
+  if (!requestTooltipPos.value) return {};
+  return {
+    left: `${requestTooltipPos.value.left}px`,
+    top: `${requestTooltipPos.value.top}px`
+  };
+});
 
 function persistDashboardCache() {
   const payload = {
@@ -532,12 +551,50 @@ function hoverIndex(event: MouseEvent, pointCount: number): number | null {
   return Math.max(0, Math.min(pointCount - 1, idx));
 }
 
+function clampXForTooltip(rawX: number, tooltipWidth: number): number {
+  const sidePadding = 12;
+  const half = tooltipWidth / 2;
+  return Math.max(sidePadding + half, Math.min(window.innerWidth - sidePadding - half, rawX));
+}
+
 function onTokenSparkMove(event: MouseEvent) {
-  tokenHoverIndex.value = hoverIndex(event, dailyTrend.value.days.length);
+  const idx = hoverIndex(event, dailyTrend.value.days.length);
+  tokenHoverIndex.value = idx;
+  if (idx === null) {
+    tokenTooltipPos.value = null;
+    return;
+  }
+  const tooltipWidth = 280;
+  const tooltipHeight = 132;
+  tokenTooltipPos.value = {
+    left: clampXForTooltip(event.clientX, tooltipWidth),
+    top: Math.max(12, event.clientY - tooltipHeight - 14)
+  };
 }
 
 function onRequestSparkMove(event: MouseEvent) {
-  requestHoverIndex.value = hoverIndex(event, dailyTrend.value.days.length);
+  const idx = hoverIndex(event, dailyTrend.value.days.length);
+  requestHoverIndex.value = idx;
+  if (idx === null) {
+    requestTooltipPos.value = null;
+    return;
+  }
+  const tooltipWidth = 260;
+  const tooltipHeight = 86;
+  requestTooltipPos.value = {
+    left: clampXForTooltip(event.clientX, tooltipWidth),
+    top: Math.max(12, event.clientY - tooltipHeight - 14)
+  };
+}
+
+function clearTokenSparkHover() {
+  tokenHoverIndex.value = null;
+  tokenTooltipPos.value = null;
+}
+
+function clearRequestSparkHover() {
+  requestHoverIndex.value = null;
+  requestTooltipPos.value = null;
 }
 
 function providerLabel(provider: ProviderKey): string {
@@ -654,12 +711,10 @@ function showCardTooltip(
   color: string
 ) {
   const target = event.currentTarget as HTMLElement;
-  const card = target.closest('.cap-card') as HTMLElement | null;
-  if (!card) return;
-  const cardRect = card.getBoundingClientRect();
   const targetRect = target.getBoundingClientRect();
-  const rawLeft = targetRect.left - cardRect.left + targetRect.width / 2;
-  const left = Math.max(140, Math.min(cardRect.width - 140, rawLeft));
+  const rawLeft = targetRect.left + targetRect.width / 2;
+  const left = clampXForTooltip(rawLeft, 360);
+  const top = Math.max(12, targetRect.top - 108);
 
   hoverTooltip.value = {
     cardKey,
@@ -667,7 +722,8 @@ function showCardTooltip(
     dateLabel: tooltipDateLabel(isoDay),
     valueLabel: format === 'currency' ? usd(value) : `${compact(value)} requests`,
     color,
-    left
+    left,
+    top
   };
 }
 
@@ -1352,16 +1408,14 @@ onBeforeUnmount(() => {
 }
 
 .usage-spark-tooltip {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%);
+  position: fixed;
   width: min(280px, 92vw);
   background: rgba(17, 24, 39, 0.94);
   color: #f8fafc;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
   padding: 10px;
-  z-index: 8;
+  z-index: 60;
   pointer-events: none;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.35);
 }
@@ -1540,16 +1594,14 @@ onBeforeUnmount(() => {
 }
 
 .cap-tooltip {
-  position: absolute;
-  top: 86px;
-  transform: translateX(-50%);
+  position: fixed;
   background: #fff;
   border: 1px solid #d8dbe7;
   border-radius: 10px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
   padding: 10px 12px;
   width: min(92%, 360px);
-  z-index: 3;
+  z-index: 60;
   pointer-events: none;
 }
 
