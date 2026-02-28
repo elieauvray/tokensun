@@ -8,7 +8,7 @@
     </article>
 
     <div class="usage-shell" :class="{ 'usage-shell-dimmed': !hasConnections }">
-      <div class="usage-sticky">
+      <div class="usage-sticky" :class="{ 'usage-sticky-disabled': !hasConnections }">
         <header class="usage-topbar">
           <h1 class="usage-title">Usage</h1>
           <div class="usage-actions">
@@ -356,7 +356,9 @@ const presets = [
   { label: 'Month to date', value: 'mtd' },
   { label: 'Last 7 days', value: '7d' },
   { label: 'Last 14 days', value: '14d' },
-  { label: 'Last 30 days', value: '30d' }
+  { label: 'Last 30 days', value: '30d' },
+  { label: 'Last 6 months', value: '6m' },
+  { label: 'Last 12 months', value: '12m' }
 ];
 
 const rangeLabel = computed(() => {
@@ -827,6 +829,12 @@ function applyPreset(value: string) {
     start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
   } else if (value === '14d') {
     start = new Date(end.getTime() - 14 * 24 * 60 * 60 * 1000);
+  } else if (value === '6m') {
+    start = new Date(end);
+    start.setMonth(start.getMonth() - 6);
+  } else if (value === '12m') {
+    start = new Date(end);
+    start.setMonth(start.getMonth() - 12);
   } else {
     start = new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
   }
@@ -1189,6 +1197,12 @@ onBeforeUnmount(() => {
   padding-bottom: 2px;
 }
 
+.usage-sticky-disabled {
+  position: static;
+  top: auto;
+  z-index: 1;
+}
+
 .usage-shell-dimmed {
   pointer-events: none;
 }
@@ -1199,7 +1213,7 @@ onBeforeUnmount(() => {
   inset: 0;
   background: rgba(100, 116, 139, 0.48);
   border-radius: 14px;
-  z-index: 12;
+  z-index: 50;
 }
 
 .usage-topbar {
