@@ -195,6 +195,11 @@ type OpenAIConnection = {
   createdAt: string;
 };
 
+type ConnectionsChangedDetail = {
+  action?: 'loaded' | 'created' | 'deleted';
+  connectionId?: string;
+};
+
 type MiniPoint = {
   date: string;
   value: number;
@@ -288,6 +293,14 @@ function persistDashboardCache() {
     activeProjectId: activeProjectId.value
   };
   localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(payload));
+}
+
+function clearDashboardCache() {
+  rows.value = [];
+  hoverTooltip.value = null;
+  activeConnectionId.value = '';
+  activeProjectId.value = '';
+  localStorage.removeItem(DASHBOARD_CACHE_KEY);
 }
 
 function restoreDashboardCache(): boolean {
@@ -475,9 +488,7 @@ async function loadConnectionContext() {
 
     hasConnections.value = openaiConnections.length > 0;
     if (!hasConnections.value) {
-      activeConnectionId.value = '';
-      activeProjectId.value = '';
-      persistDashboardCache();
+      clearDashboardCache();
       return;
     }
 
@@ -717,9 +728,21 @@ const spendCards = computed(() => {
 
 watch(rows, renderChart);
 watch(activeTab, persistDashboardCache);
-async function onConnectionsChanged() {
+async function onConnectionsChanged(event: Event) {
+  const detail = event instanceof CustomEvent ? (event.detail as ConnectionsChangedDetail | undefined) : undefined;
+  if (detail?.action === 'deleted') {
+    clearDashboardCache();
+    message.value = 'Connection deleted. Cached dashboard data cleared.';
+  }
   await loadConnectionContext();
-  message.value = 'Connection context updated. Data remains cached until Refresh.';
+  if (!hasConnections.value) {
+    clearDashboardCache();
+    message.value = 'No OpenAI connection yet. Go to Connections to create one.';
+    return;
+  }
+  if (detail?.action !== 'deleted') {
+    message.value = 'Connection context updated. Data remains cached until Refresh.';
+  }
 }
 
 onMounted(async () => {
@@ -730,6 +753,9 @@ onMounted(async () => {
   await loadConnectionContext();
   window.addEventListener('tokensun:connections-changed', onConnectionsChanged);
 
+  if (!hasConnections.value) {
+    clearDashboardCache();
+  }
   if (!restored && hasConnections.value) {
     await queryUsage();
   }

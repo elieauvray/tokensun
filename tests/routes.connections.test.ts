@@ -118,4 +118,108 @@ describe('connections routes', () => {
 
     await app.close();
   });
+
+  it('deletes usage rows tied to a deleted connection', async () => {
+    const app = buildServer();
+
+    const bootstrap = await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: {
+        upsunApiToken: 'u'.repeat(30),
+        upsunOrgId: 'org',
+        upsunProjectId: 'proj'
+      }
+    });
+    expect(bootstrap.statusCode).toBe(200);
+
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/connections',
+      payload: {
+        provider: 'openai',
+        name: 'cleanup-target',
+        config: {},
+        secrets: { apiKey: 'secret-key' }
+      }
+    });
+    expect(create.statusCode).toBe(200);
+    const id = create.json().connection.id as string;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/v1/organization/costs')) {
+          return new Response(
+            JSON.stringify({
+              data: [
+                {
+                  start_time: 1735689600,
+                  results: [{ project_id: 'project_local', amount: { value: 1.25 } }]
+                }
+              ],
+              next_page: null
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({
+            data: [
+              {
+                start_time: 1735689600,
+                results: [
+                  {
+                    model: 'gpt-4o-mini',
+                    project_id: 'project_local',
+                    input_tokens: 100,
+                    output_tokens: 50,
+                    total_tokens: 150,
+                    num_model_requests: 2
+                  }
+                ]
+              }
+            ],
+            next_page: null
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      })
+    );
+
+    const start = new Date('2025-01-01T00:00:00.000Z').toISOString();
+    const end = new Date('2025-01-03T00:00:00.000Z').toISOString();
+    const refresh = await app.inject({
+      method: 'POST',
+      url: '/api/usage/refresh',
+      payload: { connectionId: id, start, end }
+    });
+    expect(refresh.statusCode).toBe(200);
+    expect(refresh.json().rowsAdded).toBeGreaterThan(0);
+
+    const beforeDelete = await app.inject({
+      method: 'GET',
+      url: `/api/usage/query?granularity=hour&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&provider=openai&connectionId=${id}`
+    });
+    expect(beforeDelete.statusCode).toBe(200);
+    expect(beforeDelete.json().rows.length).toBeGreaterThan(0);
+
+    const remove = await app.inject({
+      method: 'DELETE',
+      url: `/api/connections/${id}`
+    });
+    expect(remove.statusCode).toBe(200);
+    expect(remove.json().ok).toBe(true);
+
+    const afterDelete = await app.inject({
+      method: 'GET',
+      url: `/api/usage/query?granularity=hour&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&provider=openai&connectionId=${id}`
+    });
+    expect(afterDelete.statusCode).toBe(200);
+    expect(afterDelete.json().rows).toHaveLength(0);
+
+    await app.close();
+  });
 });

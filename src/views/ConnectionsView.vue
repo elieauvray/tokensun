@@ -107,6 +107,13 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import { api } from '../components/api';
 
+const DASHBOARD_CACHE_KEY = 'tokensun.dashboard.cache.v1';
+
+type ConnectionsChangedDetail = {
+  action: 'loaded' | 'created' | 'deleted';
+  connectionId?: string;
+};
+
 const form = reactive({
   provider: 'openai' as const,
   name: '',
@@ -123,8 +130,8 @@ const deletingId = ref<string | null>(null);
 const latestTestResult = ref<any | null>(null);
 const activity = ref<Array<{ id: string; text: string }>>([]);
 
-function emitConnectionsChanged() {
-  window.dispatchEvent(new Event('tokensun:connections-changed'));
+function emitConnectionsChanged(detail: ConnectionsChangedDetail) {
+  window.dispatchEvent(new CustomEvent<ConnectionsChangedDetail>('tokensun:connections-changed', { detail }));
 }
 
 function pushActivity(text: string) {
@@ -152,7 +159,7 @@ async function loadConnections() {
   try {
     const res = await api<{ connections: any[] }>('/api/connections');
     connections.value = res.connections.filter((c) => c.provider === 'openai').sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    emitConnectionsChanged();
+    emitConnectionsChanged({ action: 'loaded' });
     pushActivity(`Loaded ${connections.value.length} OpenAI connection(s).`);
   } catch (err) {
     message.value = `Failed to load connections: ${formatApiError(err)}`;
@@ -182,7 +189,7 @@ async function createConnection() {
     });
 
     connections.value = [...connections.value, created.connection].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    emitConnectionsChanged();
+    emitConnectionsChanged({ action: 'created', connectionId: created.connection.id });
     form.name = '';
     form.baseUrl = '';
     form.openaiProject = '';
@@ -241,7 +248,8 @@ async function deleteConnection(id: string) {
       return;
     }
     connections.value = connections.value.filter((c) => c.id !== id);
-    emitConnectionsChanged();
+    localStorage.removeItem(DASHBOARD_CACHE_KEY);
+    emitConnectionsChanged({ action: 'deleted', connectionId: id });
     message.value = 'Connection deleted';
     pushActivity(message.value);
   } catch (err) {
