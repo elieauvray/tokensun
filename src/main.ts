@@ -9,8 +9,15 @@ import 'primevue/resources/primevue.min.css';
 import 'primeicons/primeicons.css';
 import './styles.css';
 
+const mountTarget = (
+  document.evaluate("//div[text()='Loading...']", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue as Element | null
+) ?? document.getElementById('app');
+if (!mountTarget) {
+  throw new Error('Failed to resolve app mount target');
+}
+
 const app = createApp(App);
 app.use(router);
 app.use(PrimeVue);
-app.mount('#app');
+app.mount(mountTarget);
 initIframeAutoResize(router);

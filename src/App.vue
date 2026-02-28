@@ -17,10 +17,16 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { getCurrentInstance, onMounted, onUnmounted, ref } from 'vue';
+import { getPluginSDK } from 'pluginapp-sdk-node';
 import { api } from './components/api';
 
 const hasConnections = ref(true);
+const app = getCurrentInstance()?.appContext.app;
+if (app) {
+  app.config.globalProperties.toast_duration = 5000;
+}
+let pluginSDK: ReturnType<typeof getPluginSDK> | null = null;
 
 async function refreshConnectionState() {
   try {
@@ -36,11 +42,15 @@ async function onConnectionsChanged() {
 }
 
 onMounted(async () => {
+  pluginSDK = getPluginSDK();
   window.addEventListener('tokensun:connections-changed', onConnectionsChanged);
   await refreshConnectionState();
 });
 
 onUnmounted(() => {
+  if (pluginSDK) {
+    pluginSDK.destroy();
+  }
   window.removeEventListener('tokensun:connections-changed', onConnectionsChanged);
 });
 </script>
