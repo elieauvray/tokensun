@@ -57,16 +57,6 @@
       <p v-if="message" class="usage-msg">{{ message }}</p>
 
       <section class="usage-main">
-        <article class="usage-chart-card">
-          <div class="usage-spend">
-            <p>Total Spend</p>
-            <h2>{{ usd(totalSpend) }}</h2>
-          </div>
-          <div class="usage-chart-wrap">
-            <canvas ref="canvasRef" height="170"></canvas>
-          </div>
-        </article>
-
         <aside class="usage-side">
           <article class="usage-side-card">
             <p class="usage-side-label">Monthly budget</p>
@@ -86,6 +76,16 @@
             <div class="usage-side-line"></div>
           </article>
         </aside>
+
+        <article class="usage-chart-card">
+          <div class="usage-spend">
+            <p>Total Spend</p>
+            <h2>{{ usd(totalSpend) }}</h2>
+          </div>
+          <div class="usage-chart-wrap">
+            <canvas ref="canvasRef" height="170"></canvas>
+          </div>
+        </article>
       </section>
 
       <section class="usage-tabs">
@@ -102,15 +102,17 @@
           <header class="cap-head">
             <h3>{{ card.title }}</h3>
           </header>
-          <p class="cap-meta">
-            <span>{{ compact(card.requests) }} requests</span>
-            <span>{{ compact(card.secondaryValue) }} {{ card.secondaryLabel }}</span>
-          </p>
-          <div v-if="card.series.length > 1" class="cap-series">
-            <span v-for="series in card.series" :key="`${card.key}-${series.connectionId}`" class="cap-series-item">
-              <span class="cap-tooltip-dot" :style="{ backgroundColor: series.color }"></span>
-              <span>{{ series.label }}</span>
-            </span>
+          <div class="cap-info">
+            <p class="cap-meta">
+              <span>{{ compact(card.requests) }} requests</span>
+              <span>{{ compact(card.secondaryValue) }} {{ card.secondaryLabel }}</span>
+            </p>
+            <div v-if="card.series.length > 1" class="cap-series">
+              <span v-for="series in card.series" :key="`${card.key}-${series.connectionId}`" class="cap-series-item">
+                <span class="cap-tooltip-dot" :style="{ backgroundColor: series.color }"></span>
+                <span>{{ series.label }}</span>
+              </span>
+            </div>
           </div>
           <div class="cap-chart" @mouseleave="hideCardTooltip(card.key)">
             <div class="cap-line"></div>
@@ -145,15 +147,17 @@
           <header class="cap-head">
             <h3>{{ card.title }}</h3>
           </header>
-          <p class="cap-meta">
-            <span>{{ usd(card.total) }} total</span>
-          </p>
-          <p class="cap-strong">{{ usd(card.peak) }}</p>
-          <div v-if="card.series.length > 1" class="cap-series">
-            <span v-for="series in card.series" :key="`${card.key}-${series.connectionId}`" class="cap-series-item">
-              <span class="cap-tooltip-dot" :style="{ backgroundColor: series.color }"></span>
-              <span>{{ series.label }}</span>
-            </span>
+          <div class="cap-info">
+            <p class="cap-meta">
+              <span>{{ usd(card.total) }} total</span>
+            </p>
+            <p class="cap-strong">{{ usd(card.peak) }}</p>
+            <div v-if="card.series.length > 1" class="cap-series">
+              <span v-for="series in card.series" :key="`${card.key}-${series.connectionId}`" class="cap-series-item">
+                <span class="cap-tooltip-dot" :style="{ backgroundColor: series.color }"></span>
+                <span>{{ series.label }}</span>
+              </span>
+            </div>
           </div>
           <div class="cap-chart" @mouseleave="hideCardTooltip(card.key)">
             <div class="cap-line"></div>
@@ -305,11 +309,11 @@ const rangeLabel = computed(() => {
 });
 
 const providerMeta: Record<ProviderKey, { label: string; color: string; fill: string }> = {
-  openai: { label: 'OpenAI', color: '#5b4ee6', fill: 'rgba(91,78,230,0.16)' },
-  fake: { label: 'Fake', color: '#3f5f8a', fill: 'rgba(63,95,138,0.16)' },
-  anthropic: { label: 'Anthropic', color: '#7a63d6', fill: 'rgba(122,99,214,0.16)' },
-  gemini: { label: 'Gemini', color: '#4c6fb3', fill: 'rgba(76,111,179,0.16)' },
-  mistral: { label: 'Mistral', color: '#6b7a95', fill: 'rgba(107,122,149,0.16)' }
+  openai: { label: 'OpenAI', color: '#5B4EE6', fill: 'rgba(91,78,230,0.18)' },
+  fake: { label: 'Fake', color: '#2F80ED', fill: 'rgba(47,128,237,0.18)' },
+  anthropic: { label: 'Anthropic', color: '#8B5CF6', fill: 'rgba(139,92,246,0.18)' },
+  gemini: { label: 'Gemini', color: '#06B6D4', fill: 'rgba(6,182,212,0.18)' },
+  mistral: { label: 'Mistral', color: '#F59E0B', fill: 'rgba(245,158,11,0.18)' }
 };
 
 const rows = computed(() => {
@@ -444,7 +448,7 @@ function hashString(value: string): number {
 }
 
 function connectionColor(connectionId: string): string {
-  const palette = ['#5b4ee6', '#4c6fb3', '#6b7a95', '#7a63d6', '#3f5f8a', '#6978c9', '#586a84', '#7b6aa8'];
+  const palette = ['#5B4EE6', '#2F80ED', '#8B5CF6', '#06B6D4', '#F59E0B', '#EC4899', '#6366F1', '#0EA5A4'];
   return palette[hashString(connectionId) % palette.length];
 }
 
@@ -1131,7 +1135,8 @@ onBeforeUnmount(() => {
 
 .usage-main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
   gap: 0;
   border: 1px solid #e5e7ef;
   border-radius: 14px;
@@ -1162,18 +1167,18 @@ onBeforeUnmount(() => {
 }
 
 .usage-side {
-  border-left: 1px solid #eceef6;
+  border-bottom: 1px solid #eceef6;
   display: grid;
-  grid-template-rows: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .usage-side-card {
   padding: 16px;
-  border-bottom: 1px solid #eceef6;
+  border-right: 1px solid #eceef6;
 }
 
 .usage-side-card:last-child {
-  border-bottom: 0;
+  border-right: 0;
 }
 
 .usage-side-label {
@@ -1288,6 +1293,11 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
+.cap-info {
+  display: grid;
+  gap: 4px;
+}
+
 .cap-series {
   margin-top: 6px;
   display: flex;
@@ -1397,13 +1407,8 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1280px) {
-  .usage-main {
-    grid-template-columns: 1fr;
-  }
-
   .usage-side {
-    border-left: 0;
-    border-top: 1px solid #eceef6;
+    border-bottom: 1px solid #eceef6;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-rows: 1fr;
   }
@@ -1434,6 +1439,20 @@ onBeforeUnmount(() => {
 
   .usage-actions {
     justify-content: flex-start;
+  }
+
+  .usage-side {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+  }
+
+  .usage-side-card {
+    border-right: 0;
+    border-bottom: 1px solid #eceef6;
+  }
+
+  .usage-side-card:last-child {
+    border-bottom: 0;
   }
 
   .usage-spend h2,
