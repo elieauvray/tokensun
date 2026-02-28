@@ -3,7 +3,9 @@
     <header class="usage-topbar">
       <h1 class="usage-title">Usage</h1>
       <div class="usage-actions">
-        <Dropdown v-model="projectScope" :options="projectOptions" optionLabel="label" optionValue="value" class="usage-select" />
+        <span class="usage-project-pill">
+          {{ activeProjectId ? `Project ${activeProjectId}` : 'Project not set' }}
+        </span>
 
         <button type="button" class="range-trigger" @click="toggleRangePicker">
           <span class="range-icon">🗓</span>
@@ -165,10 +167,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import Button from 'primevue/button';
 import Calendar from 'primevue/calendar';
-import Dropdown from 'primevue/dropdown';
 import { Chart, LineController, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Filler } from 'chart.js';
 import { api } from '../components/api';
 
@@ -183,6 +184,15 @@ type UsageRow = {
   totalTokens: number;
   numModelRequests: number;
   costUsd: number;
+};
+
+type OpenAIConnection = {
+  id: string;
+  provider: 'openai';
+  config?: {
+    openaiProject?: string;
+  };
+  createdAt: string;
 };
 
 type MiniPoint = {
@@ -219,8 +229,8 @@ const monthlyBudgetUsd = 10;
 const DASHBOARD_CACHE_KEY = 'tokensun.dashboard.cache.v1';
 const activeTab = ref<'capabilities' | 'spend'>('capabilities');
 const showRangePicker = ref(false);
-const projectScope = ref('all');
-const projectOptions = [{ label: 'All projects', value: 'all' }];
+const activeConnectionId = ref('');
+const activeProjectId = ref('');
 
 const now = new Date();
 const ago = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -258,6 +268,8 @@ const csvHref = computed(() => {
   p.set('start', filters.value.start);
   p.set('end', filters.value.end);
   p.set('provider', 'openai');
+  if (activeConnectionId.value) p.set('connectionId', activeConnectionId.value);
+  if (activeProjectId.value) p.set('projectId', activeProjectId.value);
   return `/api/export.csv?${p.toString()}`;
 });
 
@@ -272,7 +284,8 @@ function persistDashboardCache() {
     end: filters.value.end,
     rows: rows.value,
     activeTab: activeTab.value,
-    projectScope: projectScope.value
+    activeConnectionId: activeConnectionId.value,
+    activeProjectId: activeProjectId.value
   };
   localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(payload));
 }
@@ -286,7 +299,8 @@ function restoreDashboardCache(): boolean {
       end?: string;
       rows?: UsageRow[];
       activeTab?: 'capabilities' | 'spend';
-      projectScope?: string;
+      activeConnectionId?: string;
+      activeProjectId?: string;
     };
 
     if (parsed.start && parsed.end) {
@@ -300,8 +314,11 @@ function restoreDashboardCache(): boolean {
     if (parsed.activeTab === 'capabilities' || parsed.activeTab === 'spend') {
       activeTab.value = parsed.activeTab;
     }
-    if (typeof parsed.projectScope === 'string') {
-      projectScope.value = parsed.projectScope;
+    if (typeof parsed.activeConnectionId === 'string') {
+      activeConnectionId.value = parsed.activeConnectionId;
+    }
+    if (typeof parsed.activeProjectId === 'string') {
+      activeProjectId.value = parsed.activeProjectId;
     }
     return true;
   } catch {
@@ -449,6 +466,37 @@ function applyRangeOnly() {
   persistDashboardCache();
 }
 
+async function loadConnectionContext() {
+  try {
+    const res = await api<{ connections: OpenAIConnection[] }>('/api/connections');
+    const openaiConnections = (Array.isArray(res.connections) ? res.connections : [])
+      .filter((c) => c.provider === 'openai')
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
+    hasConnections.value = openaiConnections.length > 0;
+    if (!hasConnections.value) {
+      activeConnectionId.value = '';
+      activeProjectId.value = '';
+      persistDashboardCache();
+      return;
+    }
+
+    let selected = openaiConnections.find((c) => c.id === activeConnectionId.value);
+    if (!selected) {
+      selected =
+        openaiConnections.find((c) => String(c.config?.openaiProject || '').trim().length > 0) ?? openaiConnections[0];
+    }
+
+    activeConnectionId.value = selected.id;
+    activeProjectId.value = String(selected.config?.openaiProject || '').trim();
+    persistDashboardCache();
+  } catch {
+    hasConnections.value = false;
+    activeConnectionId.value = '';
+    activeProjectId.value = '';
+  }
+}
+
 function renderChart() {
   if (!canvasRef.value) return;
   const grouped = new Map<string, number>();
@@ -520,10 +568,7 @@ function renderChart() {
 }
 
 async function queryUsage() {
-  if (!hasConnections.value) {
-    rows.value = [];
-    return;
-  }
+  if (!hasConnections.value) return;
   if (querying.value) return;
   querying.value = true;
   try {
@@ -532,6 +577,8 @@ async function queryUsage() {
     p.set('start', filters.value.start);
     p.set('end', filters.value.end);
     p.set('provider', 'openai');
+    if (activeConnectionId.value) p.set('connectionId', activeConnectionId.value);
+    if (activeProjectId.value) p.set('projectId', activeProjectId.value);
 
     const res = await api<{ rows: UsageRow[] }>(`/api/usage/query?${p.toString()}`);
     rows.value = res.rows;
@@ -545,9 +592,15 @@ async function queryUsage() {
 
 async function refreshUsage() {
   if (!hasConnections.value) {
-    rows.value = [];
     message.value = 'No OpenAI connection yet. Go to Connections to create one.';
     return;
+  }
+  if (!activeConnectionId.value) {
+    await loadConnectionContext();
+    if (!activeConnectionId.value) {
+      message.value = 'No OpenAI connection yet. Go to Connections to create one.';
+      return;
+    }
   }
   if (refreshing.value || querying.value) return;
   refreshing.value = true;
@@ -556,6 +609,7 @@ async function refreshUsage() {
     const res = await api<{ ok: boolean; rowsAdded: number; errors?: Array<{ message: string }> }>('/api/usage/refresh', {
       method: 'POST',
       body: JSON.stringify({
+        connectionId: activeConnectionId.value,
         start: filters.value.start,
         end: filters.value.end
       })
@@ -663,21 +717,30 @@ const spendCards = computed(() => {
 
 watch(rows, renderChart);
 watch(activeTab, persistDashboardCache);
-watch(projectScope, persistDashboardCache);
+async function onConnectionsChanged() {
+  await loadConnectionContext();
+  message.value = 'Connection context updated. Data remains cached until Refresh.';
+}
+
 onMounted(async () => {
   const restored = restoreDashboardCache();
   if (restored) {
     message.value = 'Loaded cached dashboard data. Click Refresh to update from OpenAI.';
   }
-  try {
-    const res = await api<{ connections: any[] }>('/api/connections');
-    hasConnections.value = Array.isArray(res.connections) && res.connections.length > 0;
-  } catch {
-    hasConnections.value = false;
+  await loadConnectionContext();
+  window.addEventListener('tokensun:connections-changed', onConnectionsChanged);
+
+  if (!restored && hasConnections.value) {
+    await queryUsage();
   }
   if (!restored && !hasConnections.value) {
     message.value = 'No OpenAI connection yet. Go to Connections to create one.';
   }
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('tokensun:connections-changed', onConnectionsChanged);
+  persistDashboardCache();
 });
 </script>
 
@@ -714,8 +777,18 @@ onMounted(async () => {
   justify-content: flex-end;
 }
 
-.usage-select {
+.usage-project-pill {
   min-width: 170px;
+  max-width: 360px;
+  border: 1px solid #d8dbe7;
+  border-radius: 999px;
+  padding: 9px 14px;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .range-trigger {

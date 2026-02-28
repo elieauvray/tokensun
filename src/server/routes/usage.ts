@@ -74,7 +74,15 @@ const usageRoutes: FastifyPluginAsync = async (fastify) => {
         continue;
       }
 
+      const configuredProjectId = connection.config.openaiProject?.trim();
+
       for (const point of points) {
+        if (configuredProjectId) {
+          if (!point.projectId || point.projectId !== configuredProjectId) {
+            continue;
+          }
+        }
+
         for (const granularity of ['hour', 'week', 'month', 'year'] as const) {
           const reported = typeof point.costUsd === 'number';
           const cost = reported ? Number(point.costUsd) : computeCostUsd(connection, point.model, point.inputTokens, point.outputTokens);

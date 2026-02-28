@@ -16,6 +16,13 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+}
+
 body {
   margin: 0;
   background: var(--ups-bg);
@@ -23,7 +30,9 @@ body {
 }
 
 .console-layout {
-  min-height: 100vh;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
   display: grid;
   grid-template-rows: 56px 1fr;
 }
@@ -87,10 +96,12 @@ body {
 }
 
 .console-main {
-  max-width: 1240px;
   width: 100%;
-  margin: 0 auto;
-  padding: 20px;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
 }
 
 .console-section {

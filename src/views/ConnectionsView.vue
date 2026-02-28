@@ -21,7 +21,16 @@
       <div class="console-panel-body console-grid-4">
         <InputText value="openai" disabled />
         <InputText v-model="form.name" placeholder="Connection name" />
-        <InputText v-model="form.baseUrl" placeholder="Base URL (optional)" />
+        <div class="field-with-help">
+          <InputText v-model="form.baseUrl" placeholder="Base URL (optional)" />
+          <span class="help-icon">i
+            <span class="help-bubble">
+              Optional override for OpenAI API endpoint. Leave empty for default `https://api.openai.com`.
+              Use it for a proxy/gateway or OpenAI-compatible endpoint.
+            </span>
+          </span>
+        </div>
+        <InputText v-model="form.openaiProject" placeholder="OpenAI Project ID (optional, project_...)" />
         <InputText v-model="form.apiKey" type="password" placeholder="API key" />
         <Button label="Create connection" :loading="creating" :disabled="creating" @click="createConnection" />
         <Button label="Refresh list" severity="secondary" :disabled="creating || testingId !== null || deletingId !== null" @click="loadConnections" />
@@ -102,6 +111,7 @@ const form = reactive({
   provider: 'openai' as const,
   name: '',
   baseUrl: '',
+  openaiProject: '',
   apiKey: ''
 });
 
@@ -162,7 +172,8 @@ async function createConnection() {
         provider: form.provider,
         name: form.name.trim() || fallbackName,
         config: {
-          baseUrl: form.baseUrl || undefined
+          baseUrl: form.baseUrl || undefined,
+          openaiProject: form.openaiProject.trim() || undefined
         },
         secrets: {
           apiKey: form.apiKey
@@ -174,6 +185,7 @@ async function createConnection() {
     emitConnectionsChanged();
     form.name = '';
     form.baseUrl = '';
+    form.openaiProject = '';
     form.apiKey = '';
     message.value = 'Connection created';
     pushActivity(message.value);
@@ -277,5 +289,49 @@ onMounted(loadConnections);
   gap: 6px;
   color: #334155;
   font-size: 12px;
+}
+
+.field-with-help {
+  position: relative;
+}
+
+.help-icon {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid #94a3b8;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 14px;
+  text-align: center;
+  font-weight: 700;
+  background: #fff;
+  cursor: default;
+}
+
+.help-bubble {
+  position: absolute;
+  left: 24px;
+  top: -4px;
+  width: 300px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 11px;
+  line-height: 1.35;
+  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 10;
+}
+
+.help-icon:hover .help-bubble {
+  opacity: 1;
 }
 </style>
