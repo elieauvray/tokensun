@@ -94,7 +94,17 @@ export function testFake(_connection: ConnectionRecord): Record<string, unknown>
     checkedAt: new Date().toISOString(),
     endpoint: 'fake://local/synthetic-usage',
     bucketCount: 183,
-    hasNextPage: false
+    hasNextPage: false,
+    checks: [
+      {
+        key: 'synthetic_usage',
+        endpoint: 'fake://local/synthetic-usage',
+        ok: true,
+        status: 200,
+        bucketCount: 183,
+        hasNextPage: false
+      }
+    ]
   };
 }
 
@@ -160,5 +170,6 @@ export function fakeMonthlyBudgetUsd(connection: ConnectionRecord, points: Array
   const baseline = 18 + rand() * 62;
   const headroom = spend * (1.15 + rand() * 0.35);
   const budget = Math.max(baseline, headroom, spend);
-  return Number(budget.toFixed(2));
+  // Round up to the next $100 block for fake provider UX consistency.
+  return Math.ceil(budget / 100) * 100;
 }

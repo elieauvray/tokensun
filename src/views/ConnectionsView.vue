@@ -213,21 +213,54 @@ async function testConnection(id: string) {
   latestTestResult.value = null;
   pushActivity(`Testing connection ${id}...`);
   try {
-    const res = await api<{ ok: boolean; message: string; details?: Record<string, unknown> }>(`/api/connections/${id}/test`, {
+    const res = await api<{
+      ok: boolean;
+      message: string;
+      details?: Record<string, unknown> & {
+        checks?: Array<{
+          key?: string;
+          endpoint?: string;
+          ok?: boolean;
+          status?: number;
+          bucketCount?: number;
+          hasNextPage?: boolean;
+          error?: string;
+        }>;
+      };
+    }>(`/api/connections/${id}/test`, {
       method: 'POST'
     });
     latestTestResult.value = res;
     if (res.ok) {
-      const endpoint = typeof res.details?.endpoint === 'string' ? res.details.endpoint : undefined;
-      const bucketCount = typeof res.details?.bucketCount === 'number' ? res.details.bucketCount : undefined;
-      message.value = bucketCount === undefined ? 'Connection OK' : `Usage access OK (${bucketCount} bucket(s) returned)`;
+      const checks = Array.isArray(res.details?.checks) ? res.details.checks : [];
+      const bucketCount = checks.reduce((sum, c) => sum + Number(c.bucketCount || 0), 0);
+      message.value = checks.length > 0 ? `Connection OK (${checks.length} API checks passed)` : 'Connection OK';
       pushActivity(message.value);
-      if (endpoint) {
-        pushActivity(`Validated endpoint: ${endpoint}`);
+      if (checks.length > 0) {
+        for (const check of checks) {
+          const endpoint = check.endpoint || check.key || 'unknown';
+          const status = typeof check.status === 'number' ? check.status : 200;
+          const buckets = typeof check.bucketCount === 'number' ? check.bucketCount : 0;
+          const paging = check.hasNextPage ? 'next_page=yes' : 'next_page=no';
+          pushActivity(`API OK ${status} ${endpoint} | buckets=${buckets} | ${paging}`);
+        }
+        pushActivity(`API checks total buckets=${bucketCount}`);
       }
     } else {
       message.value = `Connection test failed: ${res.message}`;
       pushActivity(message.value);
+      const checks = Array.isArray(res.details?.checks) ? res.details.checks : [];
+      for (const check of checks) {
+        const endpoint = check.endpoint || check.key || 'unknown';
+        const status = typeof check.status === 'number' ? check.status : 500;
+        if (check.ok === false) {
+          pushActivity(`API FAIL ${status} ${endpoint}${check.error ? ` | ${check.error}` : ''}`);
+        } else {
+          const buckets = typeof check.bucketCount === 'number' ? check.bucketCount : 0;
+          const paging = check.hasNextPage ? 'next_page=yes' : 'next_page=no';
+          pushActivity(`API OK ${status} ${endpoint} | buckets=${buckets} | ${paging}`);
+        }
+      }
     }
   } catch (err) {
     message.value = `Test failed: ${formatApiError(err)}`;

@@ -24,6 +24,15 @@ export type OpenAITestResult = {
   endpoint: string;
   bucketCount: number;
   hasNextPage: boolean;
+  checks: Array<{
+    key: string;
+    endpoint: string;
+    ok: boolean;
+    status: number;
+    bucketCount: number;
+    hasNextPage: boolean;
+    error?: string;
+  }>;
 };
 
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
@@ -104,29 +113,61 @@ export async function testOpenAI(connection: ConnectionRecord): Promise<OpenAITe
   const base = connection.config.baseUrl ?? 'https://api.openai.com';
   const nowSec = Math.floor(Date.now() / 1000);
   const startSec = nowSec - 24 * 60 * 60;
-  const endpoint = `/v1/organization/usage/completions?start_time=${startSec}&end_time=${nowSec}&bucket_width=1d&limit=1`;
-  const res = await fetchWithTimeout(`${base}${endpoint}`, {
-    headers: {
-      authorization: `Bearer ${connection.secrets.apiKey}`,
-      ...(connection.config.openaiOrg ? { 'OpenAI-Organization': connection.config.openaiOrg } : {}),
-      ...(connection.config.openaiProject ? { 'OpenAI-Project': connection.config.openaiProject } : {})
+  const probes = [
+    {
+      key: 'usage_completions',
+      endpoint: `/v1/organization/usage/completions?start_time=${startSec}&end_time=${nowSec}&bucket_width=1d&limit=1`
+    },
+    {
+      key: 'costs',
+      endpoint: `/v1/organization/costs?start_time=${startSec}&end_time=${nowSec}&bucket_width=1d&limit=1`
     }
-  });
-  if (!res.ok) {
-    const detail = await readOpenAIErrorDetail(res);
-    const normalizedDetail = detail || (res.status === 403 ? 'forbidden_check_admin_key_or_org_permissions' : '');
-    throw new Error(`openai_test_failed:${res.status}${normalizedDetail ? `:${normalizedDetail}` : ''}`);
+  ] as const;
+
+  const checks: OpenAITestResult['checks'] = [];
+  for (const probe of probes) {
+    const res = await fetchWithTimeout(`${base}${probe.endpoint}`, {
+      headers: {
+        authorization: `Bearer ${connection.secrets.apiKey}`,
+        ...(connection.config.openaiOrg ? { 'OpenAI-Organization': connection.config.openaiOrg } : {}),
+        ...(connection.config.openaiProject ? { 'OpenAI-Project': connection.config.openaiProject } : {})
+      }
+    });
+
+    if (!res.ok) {
+      const detail = await readOpenAIErrorDetail(res);
+      checks.push({
+        key: probe.key,
+        endpoint: probe.endpoint.split('?')[0],
+        ok: false,
+        status: res.status,
+        bucketCount: 0,
+        hasNextPage: false,
+        error: detail || (res.status === 403 ? 'forbidden_check_admin_key_or_org_permissions' : undefined)
+      });
+      continue;
+    }
+
+    const payload = (await res.json()) as { data?: unknown[]; next_page?: string | null };
+    const data = Array.isArray(payload.data) ? payload.data : [];
+    checks.push({
+      key: probe.key,
+      endpoint: probe.endpoint.split('?')[0],
+      ok: true,
+      status: res.status,
+      bucketCount: data.length,
+      hasNextPage: typeof payload.next_page === 'string' && payload.next_page.length > 0
+    });
   }
 
-  const payload = (await res.json()) as { data?: unknown[]; next_page?: string | null };
-  const data = Array.isArray(payload.data) ? payload.data : [];
-  const hasNextPage = typeof payload.next_page === 'string' && payload.next_page.length > 0;
+  const primary = checks.find((check) => check.key === 'usage_completions') ?? checks[0];
 
   return {
     checkedAt: new Date().toISOString(),
     endpoint: '/v1/organization/usage/completions',
-    bucketCount: data.length,
-    hasNextPage
+    bucketCount: Number(primary?.bucketCount ?? 0),
+    hasNextPage: Boolean(primary?.hasNextPage),
+    checks
   };
 }
 

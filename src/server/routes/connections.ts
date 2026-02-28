@@ -103,6 +103,13 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const details = await runConnectionTest(connection);
+      const checks = Array.isArray((details as any)?.checks) ? ((details as any).checks as Array<{ ok?: boolean; status?: number; error?: string }>) : [];
+      const failed = checks.find((check) => check.ok === false);
+      if (failed) {
+        const status = typeof failed.status === 'number' ? failed.status : 500;
+        const suffix = failed.error ? `:${failed.error}` : '';
+        return { ok: false, message: `openai_test_failed:${status}${suffix}`, details };
+      }
       return { ok: true, message: 'connection_ok', details };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'connection_test_failed';
