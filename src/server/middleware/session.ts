@@ -9,20 +9,26 @@ import type { SessionState } from '../types/models.js';
 
 const EMPTY_SESSION: SessionState = {
   connections: [],
-  usage: []
+  usage: [],
+  usageBudgets: {}
 };
 
 function emptySession(): SessionState {
-  return { connections: [], usage: [] };
+  return { connections: [], usage: [], usageBudgets: {} };
 }
 
 function normalizeSession(input: SessionState | undefined): SessionState {
   const connections = input?.connections;
   const usage = input?.usage;
+  const usageBudgets = input?.usageBudgets;
   return {
     workspace: input?.workspace,
     connections: Array.isArray(connections) ? connections : [],
-    usage: Array.isArray(usage) ? usage : []
+    usage: Array.isArray(usage) ? usage : [],
+    usageBudgets:
+      usageBudgets && typeof usageBudgets === 'object'
+        ? Object.fromEntries(Object.entries(usageBudgets).filter(([, value]) => typeof value === 'number'))
+        : {}
   };
 }
 

@@ -56,6 +56,7 @@ export interface SessionState {
   workspace?: WorkspaceSession;
   connections: ConnectionRecord[];
   usage: UsageBucket[];
+  usageBudgets?: Record<string, number>;
 }
 
 export interface PricingEntry {

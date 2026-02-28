@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { fetchOpenAIUsage } from '../services/providers/openai.js';
-import { fetchFakeUsage } from '../services/providers/fake.js';
+import { fakeMonthlyBudgetUsd, fetchFakeUsage } from '../services/providers/fake.js';
 import { computeCostUsd } from '../services/pricing.js';
 import { queryUsage, toBucketStart, upsertUsageBuckets } from '../services/usageAggregator.js';
 import type { ConnectionRecord, UsageBucket } from '../types/models.js';
@@ -42,6 +42,15 @@ type Point = {
   costUsd?: number;
 };
 
+function providerBudgetUsd(connection: ConnectionRecord, points: Point[]): number {
+  const spend = points.reduce((sum, point) => sum + Number(point.costUsd || 0), 0);
+  if (connection.provider === 'fake') {
+    return fakeMonthlyBudgetUsd(connection, points);
+  }
+  // Fallback for providers without explicit budget endpoint: never below observed spend.
+  return Number(Math.max(10, spend).toFixed(2));
+}
+
 async function loadPoints(connection: ConnectionRecord, start: string, end: string): Promise<Point[]> {
   if (connection.provider === 'openai') return fetchOpenAIUsage(connection, start, end);
   if (connection.provider === 'fake') return fetchFakeUsage(connection, start, end);
@@ -62,6 +71,7 @@ const usageRoutes: FastifyPluginAsync = async (fastify) => {
 
     const incoming: UsageBucket[] = [];
     const errors: Array<{ connectionId?: string; provider?: string; message: string }> = [];
+    const usageBudgets = { ...(req.session.usageBudgets ?? {}) } as Record<string, number>;
 
     for (const connection of selected) {
       let points: Point[] = [];
@@ -77,14 +87,10 @@ const usageRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const configuredProjectId = connection.config.openaiProject?.trim();
+      const filteredPoints = configuredProjectId ? points.filter((point) => point.projectId && point.projectId === configuredProjectId) : points;
+      usageBudgets[connection.id] = providerBudgetUsd(connection, filteredPoints);
 
-      for (const point of points) {
-        if (configuredProjectId) {
-          if (!point.projectId || point.projectId !== configuredProjectId) {
-            continue;
-          }
-        }
-
+      for (const point of filteredPoints) {
         for (const granularity of ['hour', 'week', 'month', 'year'] as const) {
           const reported = typeof point.costUsd === 'number';
           const cost = reported ? Number(point.costUsd) : computeCostUsd(connection, point.model, point.inputTokens, point.outputTokens);
@@ -114,9 +120,9 @@ const usageRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const usage = upsertUsageBuckets(req.session.usage, incoming);
-    await reply.commitSession({ ...req.session, usage });
+    await reply.commitSession({ ...req.session, usage, usageBudgets });
 
-    return { ok: errors.length === 0, rowsAdded: incoming.length, errors };
+    return { ok: errors.length === 0, rowsAdded: incoming.length, errors, usageBudgets };
   });
 
   fastify.get('/usage/query', async (req, reply) => {
@@ -127,7 +133,8 @@ const usageRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return {
-      rows: queryUsage(req.session.usage, parsed.data)
+      rows: queryUsage(req.session.usage, parsed.data),
+      usageBudgets: req.session.usageBudgets ?? {}
     };
   });
 };

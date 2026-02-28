@@ -8,54 +8,56 @@
     </article>
 
     <div class="usage-shell" :class="{ 'usage-shell-dimmed': !hasConnections }">
-      <header class="usage-topbar">
-        <h1 class="usage-title">Usage</h1>
-        <div class="usage-actions">
-          <div class="provider-filters">
-            <label v-for="connection in availableConnections" :key="connection.id" class="provider-filter">
-              <input v-model="selectedConnectionIds" type="checkbox" :value="connection.id" />
-              <span class="provider-dot" :style="{ backgroundColor: connectionColor(connection.id) }"></span>
-              <span>{{ providerLabel(connection.provider) }}</span>
-              <button type="button" class="provider-info-btn" @click.stop.prevent="toggleConnectionInfo(connection.id)">i</button>
-              <span v-if="activeInfoConnectionId === connection.id" class="provider-info-popover">
-                Project ID: {{ connectionProjectId(connection.id) }}
-              </span>
-            </label>
+      <div class="usage-sticky">
+        <header class="usage-topbar">
+          <h1 class="usage-title">Usage</h1>
+          <div class="usage-actions">
+            <div class="provider-filters">
+              <label v-for="connection in availableConnections" :key="connection.id" class="provider-filter">
+                <input v-model="selectedConnectionIds" type="checkbox" :value="connection.id" />
+                <span class="provider-dot" :style="{ backgroundColor: connectionColor(connection.id) }"></span>
+                <span>{{ providerLabel(connection.provider) }}</span>
+                <button type="button" class="provider-info-btn" @click.stop.prevent="toggleConnectionInfo(connection.id)">i</button>
+                <span v-if="activeInfoConnectionId === connection.id" class="provider-info-popover">
+                  Project ID: {{ connectionProjectId(connection.id) }}
+                </span>
+              </label>
+            </div>
+
+            <button type="button" class="range-trigger" @click="toggleRangePicker">
+              <span class="range-icon">🗓</span>
+              <span>{{ rangeLabel }}</span>
+            </button>
+
+            <Button label="Refresh" :loading="refreshing" :disabled="refreshing || querying || !hasConnections" @click="refreshUsage" />
+            <a :href="csvHref" class="usage-export" target="_blank" rel="noreferrer">Export</a>
           </div>
+        </header>
 
-          <button type="button" class="range-trigger" @click="toggleRangePicker">
-            <span class="range-icon">🗓</span>
-            <span>{{ rangeLabel }}</span>
-          </button>
-
-          <Button label="Refresh" :loading="refreshing" :disabled="refreshing || querying || !hasConnections" @click="refreshUsage" />
-          <a :href="csvHref" class="usage-export" target="_blank" rel="noreferrer">Export</a>
-        </div>
-      </header>
-
-      <div v-if="showRangePicker" class="range-popover">
-        <aside class="range-presets">
-          <button v-for="preset in presets" :key="preset.value" type="button" class="preset-btn" @click="applyPreset(preset.value)">
-            {{ preset.label }}
-          </button>
-        </aside>
-        <div class="range-calendar">
-          <Calendar
-            v-model="rangeSelection"
-            selectionMode="range"
-            :inline="true"
-            :numberOfMonths="2"
-            :maxDate="today"
-            dateFormat="mm/dd/yy"
-            @date-select="onRangeSelect"
-          />
-          <div class="range-footer">
-            <Button label="Apply range" size="small" @click="applyRangeOnly" />
+        <div v-if="showRangePicker" class="range-popover">
+          <aside class="range-presets">
+            <button v-for="preset in presets" :key="preset.value" type="button" class="preset-btn" @click="applyPreset(preset.value)">
+              {{ preset.label }}
+            </button>
+          </aside>
+          <div class="range-calendar">
+            <Calendar
+              v-model="rangeSelection"
+              selectionMode="range"
+              :inline="true"
+              :numberOfMonths="2"
+              :maxDate="today"
+              dateFormat="mm/dd/yy"
+              @date-select="onRangeSelect"
+            />
+            <div class="range-footer">
+              <Button label="Apply range" size="small" @click="applyRangeOnly" />
+            </div>
           </div>
         </div>
+
+        <p v-if="message" class="usage-msg">{{ message }}</p>
       </div>
-
-      <p v-if="message" class="usage-msg">{{ message }}</p>
 
       <section class="usage-main">
         <aside class="usage-side">
@@ -324,7 +326,6 @@ type CapabilityKey =
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 let chart: Chart | null = null;
 
-const monthlyBudgetUsd = 10;
 const DASHBOARD_CACHE_KEY = 'tokensun.dashboard.cache.v1';
 const activeTab = ref<'capabilities' | 'spend'>('capabilities');
 const showRangePicker = ref(false);
@@ -342,6 +343,7 @@ const filters = ref({
 });
 
 const allRows = ref<UsageRow[]>([]);
+const usageBudgets = ref<Record<string, number>>({});
 const message = ref('');
 const refreshing = ref(false);
 const querying = ref(false);
@@ -391,9 +393,18 @@ const csvHref = computed(() => {
 const connectionById = computed(() => new Map(availableConnections.value.map((connection) => [connection.id, connection] as const)));
 
 const totalSpend = computed(() => rows.value.reduce((sum, row) => sum + Number(row.costUsd || 0), 0));
+const monthlyBudgetUsd = computed(() => {
+  const selected = selectedConnectionIds.value;
+  if (selected.length === 0) return Number(totalSpend.value.toFixed(2));
+  const sum = selected.reduce((acc, id) => acc + Number(usageBudgets.value[id] || 0), 0);
+  return Number(Math.max(sum, totalSpend.value).toFixed(2));
+});
 const totalTokens = computed(() => rows.value.reduce((sum, row) => sum + Number(row.totalTokens || 0), 0));
 const totalRequests = computed(() => rows.value.reduce((sum, row) => sum + Number(row.numModelRequests || 0), 0));
-const budgetPercent = computed(() => Math.min(100, (totalSpend.value / monthlyBudgetUsd) * 100));
+const budgetPercent = computed(() => {
+  if (monthlyBudgetUsd.value <= 0) return 0;
+  return Math.min(100, (totalSpend.value / monthlyBudgetUsd.value) * 100);
+});
 const tokenHoverIndex = ref<number | null>(null);
 const requestHoverIndex = ref<number | null>(null);
 const tokenTooltipPos = ref<{ left: number; top: number } | null>(null);
@@ -492,6 +503,7 @@ function persistDashboardCache() {
     start: filters.value.start,
     end: filters.value.end,
     rows: allRows.value,
+    usageBudgets: usageBudgets.value,
     activeTab: activeTab.value,
     selectedConnectionIds: selectedConnectionIds.value,
     sparkStart: sparkRange.value.start,
@@ -502,6 +514,7 @@ function persistDashboardCache() {
 
 function clearDashboardCache() {
   allRows.value = [];
+  usageBudgets.value = {};
   hoverTooltip.value = null;
   availableConnections.value = [];
   selectedConnectionIds.value = [];
@@ -518,6 +531,7 @@ function restoreDashboardCache(): boolean {
       start?: string;
       end?: string;
       rows?: UsageRow[];
+      usageBudgets?: Record<string, number>;
       activeTab?: 'capabilities' | 'spend';
       selectedConnectionIds?: string[];
       sparkStart?: string;
@@ -531,6 +545,11 @@ function restoreDashboardCache(): boolean {
     }
     if (Array.isArray(parsed.rows)) {
       allRows.value = parsed.rows;
+    }
+    if (parsed.usageBudgets && typeof parsed.usageBudgets === 'object') {
+      usageBudgets.value = Object.fromEntries(
+        Object.entries(parsed.usageBudgets).filter(([, value]) => typeof value === 'number')
+      );
     }
     if (parsed.activeTab === 'capabilities' || parsed.activeTab === 'spend') {
       activeTab.value = parsed.activeTab;
@@ -944,8 +963,11 @@ async function queryUsage() {
     p.set('start', filters.value.start);
     p.set('end', filters.value.end);
 
-    const res = await api<{ rows: UsageRow[] }>(`/api/usage/query?${p.toString()}`);
+    const res = await api<{ rows: UsageRow[]; usageBudgets?: Record<string, number> }>(`/api/usage/query?${p.toString()}`);
     allRows.value = res.rows.filter((row) => row.provider === 'openai' || row.provider === 'fake');
+    if (res.usageBudgets && typeof res.usageBudgets === 'object') {
+      usageBudgets.value = Object.fromEntries(Object.entries(res.usageBudgets).filter(([, value]) => typeof value === 'number'));
+    }
     sparkRange.value = { start: filters.value.start, end: filters.value.end };
     persistDashboardCache();
   } catch (err) {
@@ -964,13 +986,19 @@ async function refreshUsage() {
   refreshing.value = true;
   message.value = 'Refreshing usage...';
   try {
-    const res = await api<{ ok: boolean; rowsAdded: number; errors?: Array<{ message: string }> }>('/api/usage/refresh', {
+    const res = await api<{ ok: boolean; rowsAdded: number; errors?: Array<{ message: string }>; usageBudgets?: Record<string, number> }>(
+      '/api/usage/refresh',
+      {
       method: 'POST',
       body: JSON.stringify({
         start: filters.value.start,
         end: filters.value.end
       })
-    });
+      }
+    );
+    if (res.usageBudgets && typeof res.usageBudgets === 'object') {
+      usageBudgets.value = Object.fromEntries(Object.entries(res.usageBudgets).filter(([, value]) => typeof value === 'number'));
+    }
     if (res.ok) {
       message.value = `Refresh complete (${res.rowsAdded} rows added).`;
     } else {
@@ -1149,6 +1177,16 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 14px;
   position: relative;
+}
+
+.usage-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 35;
+  display: grid;
+  gap: 10px;
+  background: #f3f4f8;
+  padding-bottom: 2px;
 }
 
 .usage-shell-dimmed {
@@ -1331,6 +1369,8 @@ onBeforeUnmount(() => {
   background: #f5f3ff;
   color: #5b21b6;
   font-size: 12px;
+  position: relative;
+  z-index: 36;
 }
 
 .connect-callout {

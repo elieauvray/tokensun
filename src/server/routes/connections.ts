@@ -151,8 +151,8 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
         return { ok: false, message: 'connection_not_found' };
       }
 
-      // Deleting a connection must clear usage state to avoid stale dashboard data.
-      await reply.commitSession({ ...req.session, connections, usage: [] });
+      // Deleting a connection must clear usage/budget state to avoid stale dashboard data.
+      await reply.commitSession({ ...req.session, connections, usage: [], usageBudgets: {} });
       return { ok: true };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'connection_delete_failed';

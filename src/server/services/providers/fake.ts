@@ -152,3 +152,13 @@ export function fetchFakeUsage(connection: ConnectionRecord, start: string, end:
 
   return points;
 }
+
+export function fakeMonthlyBudgetUsd(connection: ConnectionRecord, points: Array<{ costUsd?: number }>): number {
+  const spend = points.reduce((sum, point) => sum + Number(point.costUsd || 0), 0);
+  const seed = hashConnectionId(connection.id);
+  const rand = mulberry32(seed ^ 0xa5a5a5a5);
+  const baseline = 18 + rand() * 62;
+  const headroom = spend * (1.15 + rand() * 0.35);
+  const budget = Math.max(baseline, headroom, spend);
+  return Number(budget.toFixed(2));
+}
