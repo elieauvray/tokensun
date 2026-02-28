@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { upsertUsageBuckets } from '../src/server/services/usageAggregator.js';
 
 describe('usage bucket upsert uniqueness', () => {
-  it('merges rows by unique key', () => {
+  it('replaces rows by unique key (idempotent refresh)', () => {
     const rows: any[] = [
       {
         connectionId: 'a',
@@ -35,7 +35,7 @@ describe('usage bucket upsert uniqueness', () => {
 
     const merged = upsertUsageBuckets(rows, incoming);
     expect(merged).toHaveLength(1);
-    expect(merged[0].totalTokens).toBe(12);
-    expect(merged[0].costUsd).toBe(3);
+    expect(merged[0].totalTokens).toBe(9);
+    expect(merged[0].costUsd).toBe(2);
   });
 });

@@ -51,6 +51,15 @@ function mulberry32(seed: number): () => number {
   };
 }
 
+function hashConnectionId(value: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    h ^= value.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
 function daysBetween(start: Date, end: Date): Date[] {
   const out: Date[] = [];
   const cursor = dayStartUtc(start);
@@ -83,6 +92,7 @@ export function fetchFakeUsage(connection: ConnectionRecord, start: string, end:
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from.getTime() > to.getTime()) return [];
 
   const projectId = connection.config.openaiProject?.trim() || 'project_fake_demo';
+  const connectionSalt = hashConnectionId(connection.id);
   const days = daysBetween(from, to);
   const points: FakeUsagePoint[] = [];
 
@@ -90,7 +100,7 @@ export function fetchFakeUsage(connection: ConnectionRecord, start: string, end:
     const weekday = day.getUTCDay();
     const weekdayFactor = weekday === 0 || weekday === 6 ? 0.72 : 1;
     PROFILES.forEach((profile, modelIndex) => {
-      const seed = day.getTime() ^ (modelIndex * 2654435761) ^ 0x9e3779b9;
+      const seed = day.getTime() ^ (modelIndex * 2654435761) ^ connectionSalt ^ 0x9e3779b9;
       const rand = mulberry32(seed);
       const jitter = 0.82 + rand() * 0.44;
       const trend = 0.85 + dayIndex / Math.max(days.length * 1.6, 1);

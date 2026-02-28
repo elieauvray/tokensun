@@ -264,6 +264,19 @@ describe('connections routes', () => {
     expect(create.statusCode).toBe(200);
     const id = create.json().connection.id as string;
 
+    const create2 = await app.inject({
+      method: 'POST',
+      url: '/api/connections',
+      payload: {
+        provider: 'fake',
+        name: 'Fake 2',
+        config: { openaiProject: 'project_fake_demo' },
+        secrets: {}
+      }
+    });
+    expect(create2.statusCode).toBe(200);
+    const id2 = create2.json().connection.id as string;
+
     const end = new Date();
     const start = new Date(end.getTime() - 120 * 24 * 60 * 60 * 1000);
     const refresh = await app.inject({
@@ -274,12 +287,52 @@ describe('connections routes', () => {
     expect(refresh.statusCode).toBe(200);
     expect(refresh.json().rowsAdded).toBeGreaterThan(0);
 
+    const refresh2 = await app.inject({
+      method: 'POST',
+      url: '/api/usage/refresh',
+      payload: { connectionId: id2, start: start.toISOString(), end: end.toISOString() }
+    });
+    expect(refresh2.statusCode).toBe(200);
+    expect(refresh2.json().rowsAdded).toBeGreaterThan(0);
+
     const queried = await app.inject({
       method: 'GET',
       url: `/api/usage/query?granularity=hour&start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}&provider=fake&connectionId=${id}`
     });
     expect(queried.statusCode).toBe(200);
     expect(queried.json().rows.length).toBeGreaterThan(0);
+    const firstRunRows = queried.json().rows as Array<{ totalTokens: number; costUsd: number }>;
+    const firstRunTokens = firstRunRows.reduce((sum, row) => sum + Number(row.totalTokens || 0), 0);
+    const firstRunCost = firstRunRows.reduce((sum, row) => sum + Number(row.costUsd || 0), 0);
+
+    const queried2 = await app.inject({
+      method: 'GET',
+      url: `/api/usage/query?granularity=hour&start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}&provider=fake&connectionId=${id2}`
+    });
+    expect(queried2.statusCode).toBe(200);
+    expect(queried2.json().rows.length).toBeGreaterThan(0);
+    const secondConnectionRows = queried2.json().rows as Array<{ totalTokens: number; costUsd: number }>;
+    const secondConnectionTokens = secondConnectionRows.reduce((sum, row) => sum + Number(row.totalTokens || 0), 0);
+    const secondConnectionCost = secondConnectionRows.reduce((sum, row) => sum + Number(row.costUsd || 0), 0);
+    expect(secondConnectionTokens).not.toBe(firstRunTokens);
+    expect(secondConnectionCost).not.toBe(firstRunCost);
+
+    const refreshAgain = await app.inject({
+      method: 'POST',
+      url: '/api/usage/refresh',
+      payload: { connectionId: id, start: start.toISOString(), end: end.toISOString() }
+    });
+    expect(refreshAgain.statusCode).toBe(200);
+
+    const queriedAfterSecondRefresh = await app.inject({
+      method: 'GET',
+      url: `/api/usage/query?granularity=hour&start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}&provider=fake&connectionId=${id}`
+    });
+    const afterRows = queriedAfterSecondRefresh.json().rows as Array<{ totalTokens: number; costUsd: number }>;
+    const afterTokens = afterRows.reduce((sum, row) => sum + Number(row.totalTokens || 0), 0);
+    const afterCost = afterRows.reduce((sum, row) => sum + Number(row.costUsd || 0), 0);
+    expect(afterTokens).toBe(firstRunTokens);
+    expect(Number(afterCost.toFixed(8))).toBe(Number(firstRunCost.toFixed(8)));
 
     const testRes = await app.inject({
       method: 'POST',

@@ -49,24 +49,8 @@ export function upsertUsageBuckets(existing: UsageBucket[], incoming: UsageBucke
   }
 
   for (const row of incoming) {
-    const key = keyOf(row);
-    const previous = map.get(key);
-    if (!previous) {
-      map.set(key, row);
-      continue;
-    }
-
-    map.set(key, {
-      ...previous,
-      inputTokens: previous.inputTokens + row.inputTokens,
-      inputCachedTokens: previous.inputCachedTokens + row.inputCachedTokens,
-      inputAudioTokens: previous.inputAudioTokens + row.inputAudioTokens,
-      outputTokens: previous.outputTokens + row.outputTokens,
-      outputAudioTokens: previous.outputAudioTokens + row.outputAudioTokens,
-      totalTokens: previous.totalTokens + row.totalTokens,
-      numModelRequests: previous.numModelRequests + row.numModelRequests,
-      costUsd: Number((previous.costUsd + row.costUsd).toFixed(8))
-    });
+    // Refresh is idempotent: same key replaces previous value instead of accumulating.
+    map.set(keyOf(row), row);
   }
 
   return [...map.values()].sort((a, b) => a.bucketStart.localeCompare(b.bucketStart));

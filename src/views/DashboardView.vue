@@ -11,9 +11,13 @@
       <header class="usage-topbar">
         <h1 class="usage-title">Usage</h1>
         <div class="usage-actions">
-          <span class="usage-project-pill">
-            {{ activeProjectId ? `Project ${activeProjectId}` : 'Project not set' }}
-          </span>
+          <div class="provider-filters">
+            <label v-for="connection in availableConnections" :key="connection.id" class="provider-filter">
+              <input v-model="selectedConnectionIds" type="checkbox" :value="connection.id" />
+              <span class="provider-dot" :style="{ backgroundColor: connectionColor(connection.id) }"></span>
+              <span>{{ connectionLabel(connection) }}</span>
+            </label>
+          </div>
 
           <button type="button" class="range-trigger" @click="toggleRangePicker">
             <span class="range-icon">🗓</span>
@@ -105,8 +109,8 @@
               :key="`${card.key}-${point.date}`"
               type="button"
               class="cap-stick cap-stick-hit"
-              :style="{ left: `${point.left}%`, height: `${point.height}px` }"
-              @mouseenter="showCardTooltip($event, card.key, card.title, point.date, point.value, 'number')"
+              :style="{ left: `${point.left}%`, height: `${point.height}px`, backgroundColor: card.color }"
+              @mouseenter="showCardTooltip($event, card.key, card.title, point.date, point.value, 'number', card.color)"
             ></button>
           </div>
           <footer class="cap-foot">
@@ -116,7 +120,7 @@
           <div v-if="hoverTooltip?.cardKey === card.key" class="cap-tooltip" :style="{ left: `${hoverTooltip.left}px` }">
             <p class="cap-tooltip-date">{{ hoverTooltip.dateLabel }}</p>
             <div class="cap-tooltip-row">
-              <span class="cap-tooltip-dot"></span>
+              <span class="cap-tooltip-dot" :style="{ backgroundColor: hoverTooltip.color }"></span>
               <span class="cap-tooltip-name">{{ hoverTooltip.label }}</span>
               <span class="cap-tooltip-val">{{ hoverTooltip.valueLabel }}</span>
             </div>
@@ -140,8 +144,8 @@
               :key="`${card.key}-${point.date}`"
               type="button"
               class="cap-stick cap-stick-hit"
-              :style="{ left: `${point.left}%`, height: `${point.height}px` }"
-              @mouseenter="showCardTooltip($event, card.key, card.title, point.date, point.value, 'currency')"
+              :style="{ left: `${point.left}%`, height: `${point.height}px`, backgroundColor: card.color }"
+              @mouseenter="showCardTooltip($event, card.key, card.title, point.date, point.value, 'currency', card.color)"
             ></button>
           </div>
           <footer class="cap-foot">
@@ -151,7 +155,7 @@
           <div v-if="hoverTooltip?.cardKey === card.key" class="cap-tooltip" :style="{ left: `${hoverTooltip.left}px` }">
             <p class="cap-tooltip-date">{{ hoverTooltip.dateLabel }}</p>
             <div class="cap-tooltip-row">
-              <span class="cap-tooltip-dot"></span>
+              <span class="cap-tooltip-dot" :style="{ backgroundColor: hoverTooltip.color }"></span>
               <span class="cap-tooltip-name">{{ hoverTooltip.label }}</span>
               <span class="cap-tooltip-val">{{ hoverTooltip.valueLabel }}</span>
             </div>
@@ -175,6 +179,9 @@ import { api } from '../components/api';
 Chart.register(LineController, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Filler);
 
 type UsageRow = {
+  provider: ProviderKey;
+  connectionId: string;
+  projectId?: string;
   bucketStart: string;
   model: string;
   inputTokens: number;
@@ -187,7 +194,7 @@ type UsageRow = {
 
 type SupportedConnection = {
   id: string;
-  provider: 'openai' | 'fake';
+  provider: ProviderKey;
   config?: {
     openaiProject?: string;
   };
@@ -211,8 +218,11 @@ type HoverTooltip = {
   label: string;
   dateLabel: string;
   valueLabel: string;
+  color: string;
   left: number;
 };
+
+type ProviderKey = 'openai' | 'fake' | 'anthropic' | 'gemini' | 'mistral';
 
 type CapabilityKey =
   | 'responses'
@@ -233,9 +243,8 @@ const monthlyBudgetUsd = 10;
 const DASHBOARD_CACHE_KEY = 'tokensun.dashboard.cache.v1';
 const activeTab = ref<'capabilities' | 'spend'>('capabilities');
 const showRangePicker = ref(false);
-const activeConnectionId = ref('');
-const activeProvider = ref<'openai' | 'fake'>('openai');
-const activeProjectId = ref('');
+const availableConnections = ref<SupportedConnection[]>([]);
+const selectedConnectionIds = ref<string[]>([]);
 
 const now = new Date();
 const ago = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -246,7 +255,7 @@ const filters = ref({
   end: now.toISOString()
 });
 
-const rows = ref<UsageRow[]>([]);
+const allRows = ref<UsageRow[]>([]);
 const message = ref('');
 const refreshing = ref(false);
 const querying = ref(false);
@@ -267,16 +276,32 @@ const rangeLabel = computed(() => {
   return `${fmtDate(start)} - ${fmtDate(end)}`;
 });
 
+const providerMeta: Record<ProviderKey, { label: string; color: string; fill: string }> = {
+  openai: { label: 'OpenAI', color: '#6d4aff', fill: 'rgba(109,74,255,0.16)' },
+  fake: { label: 'Fake', color: '#0ea5a1', fill: 'rgba(14,165,161,0.18)' },
+  anthropic: { label: 'Anthropic', color: '#f59e0b', fill: 'rgba(245,158,11,0.18)' },
+  gemini: { label: 'Gemini', color: '#3b82f6', fill: 'rgba(59,130,246,0.18)' },
+  mistral: { label: 'Mistral', color: '#ef4444', fill: 'rgba(239,68,68,0.18)' }
+};
+
+const rows = computed(() => {
+  if (selectedConnectionIds.value.length === 0) return [] as UsageRow[];
+  const allowed = new Set(selectedConnectionIds.value);
+  return allRows.value.filter((row) => allowed.has(row.connectionId));
+});
+
 const csvHref = computed(() => {
   const p = new URLSearchParams();
   p.set('granularity', 'hour');
   p.set('start', filters.value.start);
   p.set('end', filters.value.end);
-  p.set('provider', activeProvider.value);
-  if (activeConnectionId.value) p.set('connectionId', activeConnectionId.value);
-  if (activeProjectId.value) p.set('projectId', activeProjectId.value);
+  if (selectedConnectionIds.value.length === 1) {
+    p.set('connectionId', selectedConnectionIds.value[0]);
+  }
   return `/api/export.csv?${p.toString()}`;
 });
+
+const connectionById = computed(() => new Map(availableConnections.value.map((connection) => [connection.id, connection] as const)));
 
 const totalSpend = computed(() => rows.value.reduce((sum, row) => sum + Number(row.costUsd || 0), 0));
 const totalTokens = computed(() => rows.value.reduce((sum, row) => sum + Number(row.totalTokens || 0), 0));
@@ -287,21 +312,18 @@ function persistDashboardCache() {
   const payload = {
     start: filters.value.start,
     end: filters.value.end,
-    rows: rows.value,
+    rows: allRows.value,
     activeTab: activeTab.value,
-    activeConnectionId: activeConnectionId.value,
-    activeProvider: activeProvider.value,
-    activeProjectId: activeProjectId.value
+    selectedConnectionIds: selectedConnectionIds.value
   };
   localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(payload));
 }
 
 function clearDashboardCache() {
-  rows.value = [];
+  allRows.value = [];
   hoverTooltip.value = null;
-  activeConnectionId.value = '';
-  activeProvider.value = 'openai';
-  activeProjectId.value = '';
+  availableConnections.value = [];
+  selectedConnectionIds.value = [];
   localStorage.removeItem(DASHBOARD_CACHE_KEY);
 }
 
@@ -314,9 +336,7 @@ function restoreDashboardCache(): boolean {
       end?: string;
       rows?: UsageRow[];
       activeTab?: 'capabilities' | 'spend';
-      activeConnectionId?: string;
-      activeProvider?: 'openai' | 'fake';
-      activeProjectId?: string;
+      selectedConnectionIds?: string[];
     };
 
     if (parsed.start && parsed.end) {
@@ -325,19 +345,13 @@ function restoreDashboardCache(): boolean {
       rangeSelection.value = [new Date(parsed.start), new Date(parsed.end)];
     }
     if (Array.isArray(parsed.rows)) {
-      rows.value = parsed.rows;
+      allRows.value = parsed.rows;
     }
     if (parsed.activeTab === 'capabilities' || parsed.activeTab === 'spend') {
       activeTab.value = parsed.activeTab;
     }
-    if (typeof parsed.activeConnectionId === 'string') {
-      activeConnectionId.value = parsed.activeConnectionId;
-    }
-    if (parsed.activeProvider === 'openai' || parsed.activeProvider === 'fake') {
-      activeProvider.value = parsed.activeProvider;
-    }
-    if (typeof parsed.activeProjectId === 'string') {
-      activeProjectId.value = parsed.activeProjectId;
+    if (Array.isArray(parsed.selectedConnectionIds)) {
+      selectedConnectionIds.value = parsed.selectedConnectionIds.filter((id): id is string => typeof id === 'string' && id.length > 0);
     }
     return true;
   } catch {
@@ -383,6 +397,39 @@ function shortDate(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
 }
 
+function providerLabel(provider: ProviderKey): string {
+  return providerMeta[provider]?.label ?? provider;
+}
+
+function providerColor(provider: ProviderKey): string {
+  return providerMeta[provider]?.color ?? '#6b7280';
+}
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function connectionColor(connectionId: string): string {
+  const palette = ['#6d4aff', '#0ea5a1', '#f59e0b', '#3b82f6', '#ef4444', '#22c55e', '#d946ef', '#f97316'];
+  return palette[hashString(connectionId) % palette.length];
+}
+
+function connectionLabel(connection: SupportedConnection): string {
+  const suffix = connection.config?.openaiProject?.trim() || connection.id.slice(0, 8);
+  return `${providerLabel(connection.provider)} · ${suffix}`;
+}
+
+function connectionLabelById(connectionId: string): string {
+  const connection = connectionById.value.get(connectionId);
+  if (!connection) return connectionId.slice(0, 8);
+  return connectionLabel(connection);
+}
+
 function tooltipDateLabel(isoDay: string): string {
   const d = new Date(`${isoDay}T00:00:00.000Z`);
   return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} UTC`;
@@ -425,7 +472,8 @@ function showCardTooltip(
   label: string,
   isoDay: string,
   value: number,
-  format: 'currency' | 'number'
+  format: 'currency' | 'number',
+  color: string
 ) {
   const target = event.currentTarget as HTMLElement;
   const card = target.closest('.cap-card') as HTMLElement | null;
@@ -440,6 +488,7 @@ function showCardTooltip(
     label,
     dateLabel: tooltipDateLabel(isoDay),
     valueLabel: format === 'currency' ? usd(value) : `${compact(value)} requests`,
+    color,
     left
   };
 }
@@ -497,54 +546,61 @@ async function loadConnectionContext() {
       clearDashboardCache();
       return;
     }
-
-    let selected = supportedConnections.find((c) => c.id === activeConnectionId.value);
-    if (!selected) {
-      selected =
-        supportedConnections.find((c) => String(c.config?.openaiProject || '').trim().length > 0) ?? supportedConnections[0];
+    availableConnections.value = supportedConnections;
+    const availableIds = new Set(supportedConnections.map((c) => c.id));
+    if (selectedConnectionIds.value.length === 0) {
+      selectedConnectionIds.value = supportedConnections.map((c) => c.id);
+    } else {
+      selectedConnectionIds.value = selectedConnectionIds.value.filter((id) => availableIds.has(id));
+      if (selectedConnectionIds.value.length === 0) {
+        selectedConnectionIds.value = supportedConnections.map((c) => c.id);
+      }
     }
-
-    activeConnectionId.value = selected.id;
-    activeProvider.value = selected.provider;
-    activeProjectId.value = String(selected.config?.openaiProject || '').trim();
     persistDashboardCache();
   } catch {
     hasConnections.value = false;
-    activeConnectionId.value = '';
-    activeProvider.value = 'openai';
-    activeProjectId.value = '';
+    availableConnections.value = [];
+    selectedConnectionIds.value = [];
   }
 }
 
 function renderChart() {
   if (!canvasRef.value) return;
-  const grouped = new Map<string, number>();
+  const connectionIds = selectedConnectionIds.value;
+  const groupedByConnection = new Map<string, Map<string, number>>();
   for (const row of rows.value) {
     const day = row.bucketStart.slice(0, 10);
-    grouped.set(day, (grouped.get(day) ?? 0) + Number(row.costUsd || 0));
+    const connectionId = row.connectionId;
+    if (!groupedByConnection.has(connectionId)) groupedByConnection.set(connectionId, new Map());
+    const map = groupedByConnection.get(connectionId)!;
+    map.set(day, (map.get(day) ?? 0) + Number(row.costUsd || 0));
   }
-  const labels = [...grouped.keys()].sort();
-  const values = labels.map((k) => grouped.get(k) ?? 0);
+  const labels = [...new Set([...groupedByConnection.values()].flatMap((m) => [...m.keys()]))].sort();
+  const datasets = connectionIds
+    .filter((connectionId) => groupedByConnection.has(connectionId))
+    .map((connectionId) => {
+      const series = groupedByConnection.get(connectionId)!;
+      const color = connectionColor(connectionId);
+      return {
+        label: `${connectionLabelById(connectionId)} spend`,
+        data: labels.map((day) => series.get(day) ?? 0),
+        borderColor: color,
+        backgroundColor: `${color}2e`,
+        fill: true,
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHitRadius: 18,
+        pointHoverRadius: 5,
+        tension: 0.35
+      };
+    });
 
   if (chart) chart.destroy();
   chart = new Chart(canvasRef.value, {
     type: 'line',
     data: {
       labels,
-      datasets: [
-        {
-          label: 'Spend',
-          data: values,
-          borderColor: '#6d4aff',
-          backgroundColor: 'rgba(109,74,255,0.14)',
-          fill: true,
-          borderWidth: 2,
-          pointRadius: 0,
-          pointHitRadius: 18,
-          pointHoverRadius: 5,
-          tension: 0.35
-        }
-      ]
+      datasets
     },
     options: {
       responsive: true,
@@ -573,7 +629,7 @@ function renderChart() {
             },
             label(ctx) {
               const value = typeof ctx.parsed?.y === 'number' ? ctx.parsed.y : 0;
-              return ` Spend: ${usd(value)}`;
+              return `${ctx.dataset.label}: ${usd(value)}`;
             }
           }
         }
@@ -595,12 +651,9 @@ async function queryUsage() {
     p.set('granularity', 'hour');
     p.set('start', filters.value.start);
     p.set('end', filters.value.end);
-    p.set('provider', activeProvider.value);
-    if (activeConnectionId.value) p.set('connectionId', activeConnectionId.value);
-    if (activeProjectId.value) p.set('projectId', activeProjectId.value);
 
     const res = await api<{ rows: UsageRow[] }>(`/api/usage/query?${p.toString()}`);
-    rows.value = res.rows;
+    allRows.value = res.rows.filter((row) => row.provider === 'openai' || row.provider === 'fake');
     persistDashboardCache();
   } catch (err) {
     message.value = `Query failed: ${formatApiError(err)}`;
@@ -614,13 +667,6 @@ async function refreshUsage() {
     message.value = 'No connection yet. Go to Connections to create one.';
     return;
   }
-  if (!activeConnectionId.value) {
-    await loadConnectionContext();
-    if (!activeConnectionId.value) {
-      message.value = 'No connection yet. Go to Connections to create one.';
-      return;
-    }
-  }
   if (refreshing.value || querying.value) return;
   refreshing.value = true;
   message.value = 'Refreshing usage...';
@@ -628,7 +674,6 @@ async function refreshUsage() {
     const res = await api<{ ok: boolean; rowsAdded: number; errors?: Array<{ message: string }> }>('/api/usage/refresh', {
       method: 'POST',
       body: JSON.stringify({
-        connectionId: activeConnectionId.value,
         start: filters.value.start,
         end: filters.value.end
       })
@@ -649,47 +694,60 @@ async function refreshUsage() {
 }
 
 const capabilityCards = computed(() => {
-  const seed: Record<
-    CapabilityKey,
-    { title: string; secondaryLabel: string; requests: number; secondaryValue: number; byDay: Map<string, number> }
-  > = {
-    responses: { title: 'Responses and Chat Completions', secondaryLabel: 'input tokens', requests: 0, secondaryValue: 0, byDay: new Map() },
-    images: { title: 'Images', secondaryLabel: 'images', requests: 0, secondaryValue: 0, byDay: new Map() },
-    webSearches: { title: 'Web Searches', secondaryLabel: 'searches', requests: 0, secondaryValue: 0, byDay: new Map() },
-    fileSearches: { title: 'File Searches', secondaryLabel: 'searches', requests: 0, secondaryValue: 0, byDay: new Map() },
-    moderation: { title: 'Moderation', secondaryLabel: 'input tokens', requests: 0, secondaryValue: 0, byDay: new Map() },
-    embeddings: { title: 'Embeddings', secondaryLabel: 'input tokens', requests: 0, secondaryValue: 0, byDay: new Map() },
-    audioSpeeches: { title: 'Audio Speeches', secondaryLabel: 'characters', requests: 0, secondaryValue: 0, byDay: new Map() },
-    audioTranscriptions: { title: 'Audio Transcriptions', secondaryLabel: 'seconds', requests: 0, secondaryValue: 0, byDay: new Map() },
-    vectorStores: { title: 'Vector Stores', secondaryLabel: 'bytes', requests: 0, secondaryValue: 0, byDay: new Map() },
-    codeInterpreter: { title: 'Code Interpreter Sessions', secondaryLabel: 'sessions', requests: 0, secondaryValue: 0, byDay: new Map() }
+  const map = new Map<
+    string,
+    {
+      key: string;
+      title: string;
+      secondaryLabel: string;
+      requests: number;
+      secondaryValue: number;
+      byDay: Map<string, number>;
+      color: string;
+    }
+  >();
+
+  const capabilityMeta: Record<CapabilityKey, { title: string; secondaryLabel: string }> = {
+    responses: { title: 'Responses and Chat Completions', secondaryLabel: 'input tokens' },
+    images: { title: 'Images', secondaryLabel: 'images' },
+    webSearches: { title: 'Web Searches', secondaryLabel: 'searches' },
+    fileSearches: { title: 'File Searches', secondaryLabel: 'searches' },
+    moderation: { title: 'Moderation', secondaryLabel: 'input tokens' },
+    embeddings: { title: 'Embeddings', secondaryLabel: 'input tokens' },
+    audioSpeeches: { title: 'Audio Speeches', secondaryLabel: 'characters' },
+    audioTranscriptions: { title: 'Audio Transcriptions', secondaryLabel: 'seconds' },
+    vectorStores: { title: 'Vector Stores', secondaryLabel: 'bytes' },
+    codeInterpreter: { title: 'Code Interpreter Sessions', secondaryLabel: 'sessions' }
   };
 
   for (const row of rows.value) {
-    const key = capabilityOf(row.model);
-    seed[key].requests += Number(row.numModelRequests || 0);
-    seed[key].secondaryValue += Number(row.inputTokens || 0);
+    const capKey = capabilityOf(row.model);
+    const key = `${row.connectionId}:${capKey}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        title: `${capabilityMeta[capKey].title} (${connectionLabelById(row.connectionId)})`,
+        secondaryLabel: capabilityMeta[capKey].secondaryLabel,
+        requests: 0,
+        secondaryValue: 0,
+        byDay: new Map(),
+        color: connectionColor(row.connectionId)
+      });
+    }
+    const item = map.get(key)!;
+    item.requests += Number(row.numModelRequests || 0);
+    item.secondaryValue += Number(row.inputTokens || 0);
     const day = row.bucketStart.slice(0, 10);
-    const m = seed[key].byDay;
-    m.set(day, (m.get(day) ?? 0) + Number(row.numModelRequests || 0));
+    item.byDay.set(day, (item.byDay.get(day) ?? 0) + Number(row.numModelRequests || 0));
   }
 
-  return [
-    { key: 'responses', ...seed.responses, points: buildMiniPoints(seed.responses.byDay) },
-    { key: 'images', ...seed.images, points: buildMiniPoints(seed.images.byDay) },
-    { key: 'webSearches', ...seed.webSearches, points: buildMiniPoints(seed.webSearches.byDay) },
-    { key: 'fileSearches', ...seed.fileSearches, points: buildMiniPoints(seed.fileSearches.byDay) },
-    { key: 'moderation', ...seed.moderation, points: buildMiniPoints(seed.moderation.byDay) },
-    { key: 'embeddings', ...seed.embeddings, points: buildMiniPoints(seed.embeddings.byDay) },
-    { key: 'audioSpeeches', ...seed.audioSpeeches, points: buildMiniPoints(seed.audioSpeeches.byDay) },
-    { key: 'audioTranscriptions', ...seed.audioTranscriptions, points: buildMiniPoints(seed.audioTranscriptions.byDay) },
-    { key: 'vectorStores', ...seed.vectorStores, points: buildMiniPoints(seed.vectorStores.byDay) },
-    { key: 'codeInterpreter', ...seed.codeInterpreter, points: buildMiniPoints(seed.codeInterpreter.byDay) }
-  ];
+  return [...map.values()]
+    .map((item) => ({ ...item, points: buildMiniPoints(item.byDay) }))
+    .sort((a, b) => b.requests - a.requests);
 });
 
 const spendCards = computed(() => {
-  const map = new Map<string, { title: string; total: number; peak: number; markerPercent: number; byDay: Map<string, number> }>();
+  const map = new Map<string, { title: string; total: number; peak: number; markerPercent: number; byDay: Map<string, number>; color: string }>();
 
   for (const row of rows.value) {
     const totalToken = Math.max(1, Number(row.inputTokens || 0) + Number(row.inputCachedTokens || 0) + Number(row.outputTokens || 0));
@@ -703,14 +761,16 @@ const spendCards = computed(() => {
     for (const piece of pieces) {
       if (piece.tokens <= 0) continue;
       const partialCost = (Number(row.costUsd || 0) * piece.tokens) / totalToken;
-      const key = `${row.model}|${piece.label}`;
+      const provider = row.provider as ProviderKey;
+      const key = `${row.connectionId}|${provider}|${row.model}|${piece.label}`;
       if (!map.has(key)) {
         map.set(key, {
-          title: `${row.model}, ${piece.label}`,
+          title: `${connectionLabelById(row.connectionId)} · ${row.model}, ${piece.label}`,
           total: 0,
           peak: 0,
           markerPercent: 75,
-          byDay: new Map()
+          byDay: new Map(),
+          color: connectionColor(row.connectionId)
         });
       }
       const item = map.get(key)!;
@@ -728,6 +788,7 @@ const spendCards = computed(() => {
         title: item.title,
         total: Number(item.total.toFixed(6)),
         peak: Number(item.peak.toFixed(6)),
+        color: item.color,
         points: buildMiniPoints(item.byDay)
       };
     })
@@ -736,6 +797,10 @@ const spendCards = computed(() => {
 
 watch(rows, renderChart);
 watch(activeTab, persistDashboardCache);
+watch(selectedConnectionIds, () => {
+  renderChart();
+  persistDashboardCache();
+});
 async function onConnectionsChanged(event: Event) {
   const detail = event instanceof CustomEvent ? (event.detail as ConnectionsChangedDetail | undefined) : undefined;
   if (detail?.action === 'deleted') {
@@ -756,7 +821,7 @@ async function onConnectionsChanged(event: Event) {
 onMounted(async () => {
   const restored = restoreDashboardCache();
   if (restored) {
-    message.value = 'Loaded cached dashboard data. Click Refresh to update from OpenAI.';
+    message.value = 'Loaded cached dashboard data. Click Refresh to update usage.';
   }
   await loadConnectionContext();
   window.addEventListener('tokensun:connections-changed', onConnectionsChanged);
@@ -830,18 +895,34 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
 }
 
-.usage-project-pill {
-  min-width: 170px;
-  max-width: 360px;
+.provider-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.provider-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid #d8dbe7;
   border-radius: 999px;
-  padding: 9px 14px;
+  padding: 6px 10px;
+  background: #fff;
   color: #374151;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.provider-filter input {
+  margin: 0;
+}
+
+.provider-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
 }
 
 .range-trigger {
