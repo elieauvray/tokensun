@@ -70,8 +70,16 @@
             <p class="usage-side-value">{{ compact(totalTokens) }}</p>
             <div class="usage-spark" @mousemove="onTokenSparkMove" @mouseleave="clearTokenSparkHover">
               <svg viewBox="0 0 100 34" preserveAspectRatio="none">
-                <polyline class="usage-spark-line usage-spark-line-input" :points="tokenInputPolyline" />
-                <polyline class="usage-spark-line usage-spark-line-output" :points="tokenOutputPolyline" />
+                <g v-for="bar in tokenBars" :key="`token-bar-${bar.index}`">
+                  <template v-if="bar.drawInputAfterOutput">
+                    <rect class="usage-spark-bar usage-spark-bar-output" :x="bar.x" :y="32 - bar.outputHeight" :width="bar.width" :height="bar.outputHeight" />
+                    <rect class="usage-spark-bar usage-spark-bar-input" :x="bar.x" :y="32 - bar.inputHeight" :width="bar.width" :height="bar.inputHeight" />
+                  </template>
+                  <template v-else>
+                    <rect class="usage-spark-bar usage-spark-bar-input" :x="bar.x" :y="32 - bar.inputHeight" :width="bar.width" :height="bar.inputHeight" />
+                    <rect class="usage-spark-bar usage-spark-bar-output" :x="bar.x" :y="32 - bar.outputHeight" :width="bar.width" :height="bar.outputHeight" />
+                  </template>
+                </g>
                 <line v-if="tokenHoverIndex !== null" class="usage-spark-hover-line" :x1="sparkX(tokenHoverIndex, dailyTrend.days.length)" y1="2" :x2="sparkX(tokenHoverIndex, dailyTrend.days.length)" y2="32" />
               </svg>
               <div v-if="tokenHoverIndex !== null" class="usage-spark-tooltip" :style="tokenTooltipStyle">
@@ -95,7 +103,15 @@
             <p class="usage-side-value">{{ compact(totalRequests) }}</p>
             <div class="usage-spark" @mousemove="onRequestSparkMove" @mouseleave="clearRequestSparkHover">
               <svg viewBox="0 0 100 34" preserveAspectRatio="none">
-                <polyline class="usage-spark-line usage-spark-line-requests" :points="requestPolyline" />
+                <rect
+                  v-for="bar in requestBars"
+                  :key="`request-bar-${bar.index}`"
+                  class="usage-spark-bar usage-spark-bar-requests"
+                  :x="bar.x"
+                  :y="32 - bar.height"
+                  :width="bar.width"
+                  :height="bar.height"
+                />
                 <line v-if="requestHoverIndex !== null" class="usage-spark-hover-line" :x1="sparkX(requestHoverIndex, dailyTrend.days.length)" y1="2" :x2="sparkX(requestHoverIndex, dailyTrend.days.length)" y2="32" />
               </svg>
               <div v-if="requestHoverIndex !== null" class="usage-spark-tooltip" :style="requestTooltipStyle">
@@ -283,6 +299,13 @@ type MiniSeries = {
   points: MiniPoint[];
 };
 
+type SparkBar = {
+  index: number;
+  x: number;
+  width: number;
+  height: number;
+};
+
 type ProviderKey = 'openai' | 'fake' | 'anthropic' | 'gemini' | 'mistral';
 
 type CapabilityKey =
@@ -375,10 +398,11 @@ const tokenHoverIndex = ref<number | null>(null);
 const requestHoverIndex = ref<number | null>(null);
 const tokenTooltipPos = ref<{ left: number; top: number } | null>(null);
 const requestTooltipPos = ref<{ left: number; top: number } | null>(null);
+const sparkRange = ref<{ start: string; end: string }>({ start: filters.value.start, end: filters.value.end });
 
 const dailyTrend = computed(() => {
-  const start = new Date(filters.value.start);
-  const end = new Date(filters.value.end);
+  const start = new Date(sparkRange.value.start);
+  const end = new Date(sparkRange.value.end);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start.getTime() > end.getTime()) {
     return { days: [] as string[], input: [] as number[], output: [] as number[], requests: [] as number[] };
   }
@@ -411,9 +435,43 @@ const dailyTrend = computed(() => {
   return { days, input, output, requests };
 });
 
-const tokenInputPolyline = computed(() => sparkPolyline(dailyTrend.value.input));
-const tokenOutputPolyline = computed(() => sparkPolyline(dailyTrend.value.output));
-const requestPolyline = computed(() => sparkPolyline(dailyTrend.value.requests));
+const tokenBars = computed(() => {
+  const { input, output } = dailyTrend.value;
+  const count = Math.max(input.length, output.length);
+  if (count === 0) return [] as Array<SparkBar & { inputHeight: number; outputHeight: number; drawInputAfterOutput: boolean }>;
+
+  const maxValue = Math.max(1, ...input, ...output);
+  const width = 100 / count;
+  return new Array(count).fill(0).map((_, index) => {
+    const inVal = Number(input[index] || 0);
+    const outVal = Number(output[index] || 0);
+    const inputHeight = inVal > 0 ? Math.max(2.4, (inVal / maxValue) * 30) : 0;
+    const outputHeight = outVal > 0 ? Math.max(2.4, (outVal / maxValue) * 30) : 0;
+    return {
+      index,
+      x: index * width,
+      width,
+      height: 0,
+      inputHeight,
+      outputHeight,
+      drawInputAfterOutput: inputHeight <= outputHeight
+    };
+  });
+});
+
+const requestBars = computed(() => {
+  const values = dailyTrend.value.requests;
+  const count = values.length;
+  if (count === 0) return [] as SparkBar[];
+  const maxValue = Math.max(1, ...values);
+  const width = 100 / count;
+  return values.map((value, index) => ({
+    index,
+    x: index * width,
+    width,
+    height: value > 0 ? Math.max(2.4, (Number(value) / maxValue) * 30) : 0
+  }));
+});
 const tokenTooltipStyle = computed(() => {
   if (!tokenTooltipPos.value) return {};
   return {
@@ -435,7 +493,9 @@ function persistDashboardCache() {
     end: filters.value.end,
     rows: allRows.value,
     activeTab: activeTab.value,
-    selectedConnectionIds: selectedConnectionIds.value
+    selectedConnectionIds: selectedConnectionIds.value,
+    sparkStart: sparkRange.value.start,
+    sparkEnd: sparkRange.value.end
   };
   localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(payload));
 }
@@ -445,6 +505,7 @@ function clearDashboardCache() {
   hoverTooltip.value = null;
   availableConnections.value = [];
   selectedConnectionIds.value = [];
+  sparkRange.value = { start: filters.value.start, end: filters.value.end };
   activeInfoConnectionId.value = null;
   localStorage.removeItem(DASHBOARD_CACHE_KEY);
 }
@@ -459,6 +520,8 @@ function restoreDashboardCache(): boolean {
       rows?: UsageRow[];
       activeTab?: 'capabilities' | 'spend';
       selectedConnectionIds?: string[];
+      sparkStart?: string;
+      sparkEnd?: string;
     };
 
     if (parsed.start && parsed.end) {
@@ -474,6 +537,9 @@ function restoreDashboardCache(): boolean {
     }
     if (Array.isArray(parsed.selectedConnectionIds)) {
       selectedConnectionIds.value = parsed.selectedConnectionIds.filter((id): id is string => typeof id === 'string' && id.length > 0);
+    }
+    if (parsed.sparkStart && parsed.sparkEnd) {
+      sparkRange.value = { start: parsed.sparkStart, end: parsed.sparkEnd };
     }
     return true;
   } catch {
@@ -528,17 +594,6 @@ function sparkTooltipDate(day: string): string {
 function sparkX(index: number, length: number): number {
   if (length <= 1) return 50;
   return (index / (length - 1)) * 100;
-}
-
-function sparkPolyline(values: number[]): string {
-  if (values.length === 0) return '';
-  const max = Math.max(1, ...values);
-  const points = values.map((value, index) => {
-    const x = sparkX(index, values.length);
-    const y = 32 - (value / max) * 28;
-    return `${x},${Math.max(2, Math.min(32, y))}`;
-  });
-  return points.join(' ');
 }
 
 function hoverIndex(event: MouseEvent, pointCount: number): number | null {
@@ -891,6 +946,7 @@ async function queryUsage() {
 
     const res = await api<{ rows: UsageRow[] }>(`/api/usage/query?${p.toString()}`);
     allRows.value = res.rows.filter((row) => row.provider === 'openai' || row.provider === 'fake');
+    sparkRange.value = { start: filters.value.start, end: filters.value.end };
     persistDashboardCache();
   } catch (err) {
     message.value = `Query failed: ${formatApiError(err)}`;
@@ -1385,21 +1441,20 @@ onBeforeUnmount(() => {
   overflow: visible;
 }
 
-.usage-spark-line {
-  fill: none;
-  stroke-width: 2.4;
+.usage-spark-bar {
+  shape-rendering: crispEdges;
 }
 
-.usage-spark-line-input {
-  stroke: #f59e0b;
+.usage-spark-bar-input {
+  fill: #f59e0b;
 }
 
-.usage-spark-line-output {
-  stroke: #ec4899;
+.usage-spark-bar-output {
+  fill: #ec4899;
 }
 
-.usage-spark-line-requests {
-  stroke: #6366f1;
+.usage-spark-bar-requests {
+  fill: #6366f1;
 }
 
 .usage-spark-hover-line {
