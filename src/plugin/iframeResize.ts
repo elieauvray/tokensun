@@ -17,6 +17,8 @@ function measureContentHeight(): number {
 function postResize(height: number): void {
   for (const topic of RESIZE_TOPICS) {
     const payloads: unknown[] = [
+      { action: topic, data: height },
+      { action: topic, data: { height } },
       { topic, data: { height } },
       { type: topic, data: { height } },
       { topic, height },
@@ -35,6 +37,8 @@ function postResize(height: number): void {
 function postViewLoaded(): void {
   for (const topic of VIEW_LOADED_TOPICS) {
     const payloads: unknown[] = [
+      { action: topic, data: true },
+      { action: topic, data: {} },
       { topic },
       { type: topic },
       { topic, data: {} },
