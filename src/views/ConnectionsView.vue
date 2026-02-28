@@ -329,6 +329,12 @@ onMounted(loadConnections);
 
 .field-with-help {
   position: relative;
+  width: 100%;
+}
+
+.field-with-help :deep(.p-inputtext) {
+  width: 100%;
+  padding-right: 34px;
 }
 
 .help-icon {
@@ -351,9 +357,10 @@ onMounted(loadConnections);
 
 .help-bubble {
   position: absolute;
-  left: 24px;
-  top: -4px;
-  width: 300px;
+  right: 24px;
+  bottom: calc(100% + 8px);
+  width: min(340px, calc(100vw - 40px));
+  max-width: calc(100vw - 40px);
   padding: 8px 10px;
   border-radius: 8px;
   background: #0f172a;
@@ -364,7 +371,7 @@ onMounted(loadConnections);
   opacity: 0;
   pointer-events: none;
   transition: opacity 120ms ease;
-  z-index: 10;
+  z-index: 30;
 }
 
 .help-icon:hover .help-bubble {

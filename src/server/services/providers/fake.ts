@@ -167,9 +167,9 @@ export function fakeMonthlyBudgetUsd(connection: ConnectionRecord, points: Array
   const spend = points.reduce((sum, point) => sum + Number(point.costUsd || 0), 0);
   const seed = hashConnectionId(connection.id);
   const rand = mulberry32(seed ^ 0xa5a5a5a5);
-  const baseline = 18 + rand() * 62;
-  const headroom = spend * (1.15 + rand() * 0.35);
-  const budget = Math.max(baseline, headroom, spend);
+  const jitter = 1 + (rand() - 0.5) * 0.04; // +/-2% deterministic jitter per connection
+  const budgetTargetFromSpend = spend > 0 ? (spend / 0.8) * jitter : 100;
+  const budget = Math.max(budgetTargetFromSpend, spend);
   // Round up to the next $100 block for fake provider UX consistency.
   return Math.ceil(budget / 100) * 100;
 }

@@ -1,6 +1,8 @@
 import type { Router } from 'vue-router';
 
 const RESIZE_TOPIC = 'PLUGIN_TOPIC_RESIZE_IFRAME';
+const MAX_HEIGHT_SESSION_KEY = 'tokensun.iframe.maxHeight';
+const MIN_IFRAME_HEIGHT = 1800;
 
 function measureContentHeight(): number {
   const body = document.body;
@@ -24,15 +26,20 @@ function postResize(height: number): void {
 }
 
 export function initIframeAutoResize(router: Router): void {
-  let lastHeight = 0;
+  const restoredMax = Number(sessionStorage.getItem(MAX_HEIGHT_SESSION_KEY) || 0);
+  let maxHeightSeen = Number.isFinite(restoredMax) ? Math.max(0, restoredMax) : 0;
+  let lastPostedHeight = 0;
   let raf = 0;
 
   const flush = () => {
     raf = 0;
-    const next = measureContentHeight();
-    if (next !== lastHeight) {
-      lastHeight = next;
-      postResize(next);
+    const measured = measureContentHeight();
+    const stableTarget = Math.max(MIN_IFRAME_HEIGHT, measured, maxHeightSeen);
+    maxHeightSeen = stableTarget;
+    sessionStorage.setItem(MAX_HEIGHT_SESSION_KEY, String(maxHeightSeen));
+    if (stableTarget !== lastPostedHeight) {
+      lastPostedHeight = stableTarget;
+      postResize(stableTarget);
     }
   };
 
