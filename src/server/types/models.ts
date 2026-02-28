@@ -1,4 +1,4 @@
-export type Provider = 'openai' | 'anthropic' | 'gemini' | 'mistral';
+export type Provider = 'openai' | 'fake' | 'anthropic' | 'gemini' | 'mistral';
 
 export type CostMode = 'reported' | 'estimated';
 

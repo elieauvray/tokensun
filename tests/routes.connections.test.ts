@@ -51,6 +51,18 @@ describe('connections routes', () => {
 
     expect(valid.statusCode).toBe(200);
 
+    const fake = await app.inject({
+      method: 'POST',
+      url: '/api/connections',
+      payload: {
+        provider: 'fake',
+        name: 'Fake',
+        config: { openaiProject: 'project_fake_demo' },
+        secrets: {}
+      }
+    });
+    expect(fake.statusCode).toBe(200);
+
     const list = await app.inject({
       method: 'GET',
       url: '/api/connections'
@@ -58,9 +70,11 @@ describe('connections routes', () => {
 
     expect(list.statusCode).toBe(200);
     const body = list.json();
-    expect(body.connections).toHaveLength(1);
+    expect(body.connections).toHaveLength(2);
     expect(body.connections[0].hasSecrets).toBe(true);
     expect(body.connections[0].secrets).toBeUndefined();
+    expect(body.connections[1].provider).toBe('fake');
+    expect(body.connections[1].hasSecrets).toBe(false);
 
     await app.close();
   });
@@ -219,6 +233,61 @@ describe('connections routes', () => {
     });
     expect(afterDelete.statusCode).toBe(200);
     expect(afterDelete.json().rows).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it('generates fake provider usage for dashboard testing', async () => {
+    const app = buildServer();
+
+    const bootstrap = await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: {
+        upsunApiToken: 'u'.repeat(30),
+        upsunOrgId: 'org',
+        upsunProjectId: 'proj'
+      }
+    });
+    expect(bootstrap.statusCode).toBe(200);
+
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/connections',
+      payload: {
+        provider: 'fake',
+        name: 'Fake',
+        config: { openaiProject: 'project_fake_demo' },
+        secrets: {}
+      }
+    });
+    expect(create.statusCode).toBe(200);
+    const id = create.json().connection.id as string;
+
+    const end = new Date();
+    const start = new Date(end.getTime() - 120 * 24 * 60 * 60 * 1000);
+    const refresh = await app.inject({
+      method: 'POST',
+      url: '/api/usage/refresh',
+      payload: { connectionId: id, start: start.toISOString(), end: end.toISOString() }
+    });
+    expect(refresh.statusCode).toBe(200);
+    expect(refresh.json().rowsAdded).toBeGreaterThan(0);
+
+    const queried = await app.inject({
+      method: 'GET',
+      url: `/api/usage/query?granularity=hour&start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}&provider=fake&connectionId=${id}`
+    });
+    expect(queried.statusCode).toBe(200);
+    expect(queried.json().rows.length).toBeGreaterThan(0);
+
+    const testRes = await app.inject({
+      method: 'POST',
+      url: `/api/connections/${id}/test`
+    });
+    expect(testRes.statusCode).toBe(200);
+    expect(testRes.json().ok).toBe(true);
+    expect(testRes.json().details.endpoint).toBe('fake://local/synthetic-usage');
 
     await app.close();
   });

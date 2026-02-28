@@ -2,25 +2,13 @@
   <section class="console-section">
     <article class="console-panel">
       <header class="console-panel-header">
-        <h2 class="console-panel-title">Security notice</h2>
-      </header>
-      <div class="console-panel-body">
-        <p class="security-note">
-          Your LLM credentials are stored securely within your browser and solely transmitted to the tokensun server hosted on Upsun.
-          This method enhances security by ensuring that your credentials are not shared with any third parties, thereby reducing the risk of unauthorized access.
-          Please note that if you access Upsun from a different browser or device, you will be required to re-enter your llm key.
-        </p>
-      </div>
-    </article>
-
-    <article class="console-panel">
-      <header class="console-panel-header">
         <h2 class="console-panel-title">Provider connections</h2>
-        <p class="console-panel-subtitle">Create and manage OpenAI provider connections.</p>
+        <p class="console-panel-subtitle">Create and manage LLM provider connections.</p>
       </header>
       <div class="console-panel-body console-grid-4">
-        <InputText value="openai" disabled />
-        <InputText v-model="form.name" placeholder="Connection name" />
+        <Dropdown v-model="form.provider" :options="providerOptions" optionLabel="label" optionValue="value" placeholder="Provider" />
+        <InputText v-model="form.openaiProject" placeholder="OpenAI Project ID (optional, project_...)" />
+        <InputText v-model="form.apiKey" type="password" placeholder="API key" />
         <div class="field-with-help">
           <InputText v-model="form.baseUrl" placeholder="Base URL (optional)" />
           <span class="help-icon">i
@@ -30,10 +18,12 @@
             </span>
           </span>
         </div>
-        <InputText v-model="form.openaiProject" placeholder="OpenAI Project ID (optional, project_...)" />
-        <InputText v-model="form.apiKey" type="password" placeholder="API key" />
-        <Button label="Create connection" :loading="creating" :disabled="creating" @click="createConnection" />
-        <Button label="Refresh list" severity="secondary" :disabled="creating || testingId !== null || deletingId !== null" @click="loadConnections" />
+        <Button
+          label="Create connection"
+          :loading="creating"
+          :disabled="creating || (form.provider !== 'openai' && form.provider !== 'fake')"
+          @click="createConnection"
+        />
       </div>
     </article>
 
@@ -103,11 +93,19 @@
 import { onMounted, reactive, ref } from 'vue';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
+import Dropdown from 'primevue/dropdown';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import { api } from '../components/api';
 
 const DASHBOARD_CACHE_KEY = 'tokensun.dashboard.cache.v1';
+const providerOptions = [
+  { label: 'OpenAI', value: 'openai' },
+  { label: 'Fake (demo)', value: 'fake' },
+  { label: 'Anthropic', value: 'anthropic' },
+  { label: 'Gemini', value: 'gemini' },
+  { label: 'Mistral', value: 'mistral' }
+] as const;
 
 type ConnectionsChangedDetail = {
   action: 'loaded' | 'created' | 'deleted';
@@ -115,8 +113,7 @@ type ConnectionsChangedDetail = {
 };
 
 const form = reactive({
-  provider: 'openai' as const,
-  name: '',
+  provider: 'openai' as (typeof providerOptions)[number]['value'],
   baseUrl: '',
   openaiProject: '',
   apiKey: ''
@@ -158,9 +155,11 @@ function formatApiError(err: unknown): string {
 async function loadConnections() {
   try {
     const res = await api<{ connections: any[] }>('/api/connections');
-    connections.value = res.connections.filter((c) => c.provider === 'openai').sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    connections.value = res.connections
+      .filter((c) => c.provider === 'openai' || c.provider === 'fake')
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     emitConnectionsChanged({ action: 'loaded' });
-    pushActivity(`Loaded ${connections.value.length} OpenAI connection(s).`);
+    pushActivity(`Loaded ${connections.value.length} supported connection(s).`);
   } catch (err) {
     message.value = `Failed to load connections: ${formatApiError(err)}`;
     pushActivity(message.value);
@@ -168,33 +167,36 @@ async function loadConnections() {
 }
 
 async function createConnection() {
+  if (form.provider !== 'openai' && form.provider !== 'fake') {
+    message.value = 'Provider not supported yet in this app.';
+    return;
+  }
   if (creating.value) return;
   creating.value = true;
-  pushActivity('Creating OpenAI connection...');
+  pushActivity(`Creating ${form.provider.toUpperCase()} connection...`);
   try {
-    const fallbackName = `${form.provider.toUpperCase()} connection`;
+    const isFake = form.provider === 'fake';
     const created = await api<{ connection: any }>('/api/connections', {
       method: 'POST',
       body: JSON.stringify({
         provider: form.provider,
-        name: form.name.trim() || fallbackName,
+        name: isFake ? 'FAKE demo connection' : 'OPENAI connection',
         config: {
           baseUrl: form.baseUrl || undefined,
           openaiProject: form.openaiProject.trim() || undefined
         },
         secrets: {
-          apiKey: form.apiKey
+          apiKey: isFake ? undefined : form.apiKey
         }
       })
     });
 
     connections.value = [...connections.value, created.connection].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     emitConnectionsChanged({ action: 'created', connectionId: created.connection.id });
-    form.name = '';
     form.baseUrl = '';
     form.openaiProject = '';
     form.apiKey = '';
-    message.value = 'Connection created';
+    message.value = isFake ? 'Fake demo connection created' : 'Connection created';
     pushActivity(message.value);
   } catch (err) {
     message.value = `Create failed: ${formatApiError(err)}`;
@@ -207,7 +209,7 @@ async function createConnection() {
 async function testConnection(id: string) {
   if (testingId.value || deletingId.value) return;
   testingId.value = id;
-  message.value = 'Testing OpenAI connection...';
+  message.value = 'Testing connection...';
   latestTestResult.value = null;
   pushActivity(`Testing connection ${id}...`);
   try {
@@ -218,13 +220,13 @@ async function testConnection(id: string) {
     if (res.ok) {
       const endpoint = typeof res.details?.endpoint === 'string' ? res.details.endpoint : undefined;
       const bucketCount = typeof res.details?.bucketCount === 'number' ? res.details.bucketCount : undefined;
-      message.value = bucketCount === undefined ? 'OpenAI connection OK' : `OpenAI usage access OK (${bucketCount} bucket(s) returned)`;
+      message.value = bucketCount === undefined ? 'Connection OK' : `Usage access OK (${bucketCount} bucket(s) returned)`;
       pushActivity(message.value);
       if (endpoint) {
         pushActivity(`Validated endpoint: ${endpoint}`);
       }
     } else {
-      message.value = `OpenAI test failed: ${res.message}`;
+      message.value = `Connection test failed: ${res.message}`;
       pushActivity(message.value);
     }
   } catch (err) {
@@ -264,13 +266,6 @@ onMounted(loadConnections);
 </script>
 
 <style scoped>
-.security-note {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #334155;
-}
-
 .console-hint {
   margin: 0;
   color: #64748b;

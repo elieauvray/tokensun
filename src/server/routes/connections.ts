@@ -1,12 +1,13 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { testFake } from '../services/providers/fake.js';
 import { testOpenAI } from '../services/providers/openai.js';
 import type { ConnectionRecord, Provider } from '../types/models.js';
 
-const providerSchema = z.literal('openai');
+const providerSchema = z.enum(['openai', 'fake']);
 
-const upsertSchema = z.object({
+const baseConnectionSchema = z.object({
   provider: providerSchema,
   name: z.string().min(1).max(120),
   config: z
@@ -20,19 +21,28 @@ const upsertSchema = z.object({
     })
     .default({}),
   secrets: z.object({
-    apiKey: z.string().min(8)
+    apiKey: z.string().min(8).optional()
   })
 });
 
-const updateSchema = upsertSchema.partial().refine((v) => !!(v.name || v.config || v.secrets || v.provider), {
+const upsertSchema = baseConnectionSchema.superRefine((value, ctx) => {
+  if (value.provider === 'openai' && !value.secrets.apiKey) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['secrets', 'apiKey'],
+      message: 'api_key_required_for_openai'
+    });
+  }
+});
+
+const updateSchema = baseConnectionSchema.partial().refine((v) => !!(v.name || v.config || v.secrets || v.provider), {
   message: 'at_least_one_field_required'
 });
 
 async function runConnectionTest(connection: ConnectionRecord): Promise<Record<string, unknown>> {
-  if (connection.provider !== 'openai') {
-    throw new Error('unsupported_provider');
-  }
-  return testOpenAI(connection);
+  if (connection.provider === 'openai') return testOpenAI(connection);
+  if (connection.provider === 'fake') return testFake(connection);
+  throw new Error('unsupported_provider');
 }
 
 function toPublicConnection(connection: ConnectionRecord) {
@@ -42,7 +52,7 @@ function toPublicConnection(connection: ConnectionRecord) {
     name: connection.name,
     slug: `C${connection.id.replace(/-/g, '').slice(0, 8).toUpperCase()}`,
     config: connection.config,
-    hasSecrets: Boolean(connection.secrets?.apiKey),
+    hasSecrets: connection.provider === 'fake' ? false : Boolean(connection.secrets?.apiKey),
     createdAt: connection.createdAt,
     updatedAt: connection.updatedAt
   };
@@ -64,7 +74,9 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
       provider: body.provider as Provider,
       name: body.name,
       config: body.config,
-      secrets: body.secrets,
+      secrets: {
+        apiKey: body.provider === 'fake' ? body.secrets.apiKey ?? 'fake-demo-key' : body.secrets.apiKey!
+      },
       createdAt: now,
       updatedAt: now
     };

@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { fetchOpenAIUsage } from '../services/providers/openai.js';
+import { fetchFakeUsage } from '../services/providers/fake.js';
 import { computeCostUsd } from '../services/pricing.js';
 import { queryUsage, toBucketStart, upsertUsageBuckets } from '../services/usageAggregator.js';
 import type { ConnectionRecord, UsageBucket } from '../types/models.js';
@@ -42,8 +43,9 @@ type Point = {
 };
 
 async function loadPoints(connection: ConnectionRecord, start: string, end: string): Promise<Point[]> {
-  if (connection.provider !== 'openai') return [];
-  return fetchOpenAIUsage(connection, start, end);
+  if (connection.provider === 'openai') return fetchOpenAIUsage(connection, start, end);
+  if (connection.provider === 'fake') return fetchFakeUsage(connection, start, end);
+  return [];
 }
 
 const usageRoutes: FastifyPluginAsync = async (fastify) => {

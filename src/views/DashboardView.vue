@@ -2,8 +2,8 @@
   <section class="usage-page">
     <article v-if="!hasConnections" class="connect-callout">
       <div>
-        <h2>No OpenAI connection configured</h2>
-        <p>Create a connection first to load usage and spend data from the OpenAI API.</p>
+        <h2>No connection configured</h2>
+        <p>Create an OpenAI or Fake provider connection to load usage and spend data.</p>
       </div>
     </article>
 
@@ -185,9 +185,9 @@ type UsageRow = {
   costUsd: number;
 };
 
-type OpenAIConnection = {
+type SupportedConnection = {
   id: string;
-  provider: 'openai';
+  provider: 'openai' | 'fake';
   config?: {
     openaiProject?: string;
   };
@@ -234,6 +234,7 @@ const DASHBOARD_CACHE_KEY = 'tokensun.dashboard.cache.v1';
 const activeTab = ref<'capabilities' | 'spend'>('capabilities');
 const showRangePicker = ref(false);
 const activeConnectionId = ref('');
+const activeProvider = ref<'openai' | 'fake'>('openai');
 const activeProjectId = ref('');
 
 const now = new Date();
@@ -271,7 +272,7 @@ const csvHref = computed(() => {
   p.set('granularity', 'hour');
   p.set('start', filters.value.start);
   p.set('end', filters.value.end);
-  p.set('provider', 'openai');
+  p.set('provider', activeProvider.value);
   if (activeConnectionId.value) p.set('connectionId', activeConnectionId.value);
   if (activeProjectId.value) p.set('projectId', activeProjectId.value);
   return `/api/export.csv?${p.toString()}`;
@@ -289,6 +290,7 @@ function persistDashboardCache() {
     rows: rows.value,
     activeTab: activeTab.value,
     activeConnectionId: activeConnectionId.value,
+    activeProvider: activeProvider.value,
     activeProjectId: activeProjectId.value
   };
   localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(payload));
@@ -298,6 +300,7 @@ function clearDashboardCache() {
   rows.value = [];
   hoverTooltip.value = null;
   activeConnectionId.value = '';
+  activeProvider.value = 'openai';
   activeProjectId.value = '';
   localStorage.removeItem(DASHBOARD_CACHE_KEY);
 }
@@ -312,6 +315,7 @@ function restoreDashboardCache(): boolean {
       rows?: UsageRow[];
       activeTab?: 'capabilities' | 'spend';
       activeConnectionId?: string;
+      activeProvider?: 'openai' | 'fake';
       activeProjectId?: string;
     };
 
@@ -328,6 +332,9 @@ function restoreDashboardCache(): boolean {
     }
     if (typeof parsed.activeConnectionId === 'string') {
       activeConnectionId.value = parsed.activeConnectionId;
+    }
+    if (parsed.activeProvider === 'openai' || parsed.activeProvider === 'fake') {
+      activeProvider.value = parsed.activeProvider;
     }
     if (typeof parsed.activeProjectId === 'string') {
       activeProjectId.value = parsed.activeProjectId;
@@ -480,29 +487,31 @@ function applyRangeOnly() {
 
 async function loadConnectionContext() {
   try {
-    const res = await api<{ connections: OpenAIConnection[] }>('/api/connections');
-    const openaiConnections = (Array.isArray(res.connections) ? res.connections : [])
-      .filter((c) => c.provider === 'openai')
+    const res = await api<{ connections: SupportedConnection[] }>('/api/connections');
+    const supportedConnections = (Array.isArray(res.connections) ? res.connections : [])
+      .filter((c) => c.provider === 'openai' || c.provider === 'fake')
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
-    hasConnections.value = openaiConnections.length > 0;
+    hasConnections.value = supportedConnections.length > 0;
     if (!hasConnections.value) {
       clearDashboardCache();
       return;
     }
 
-    let selected = openaiConnections.find((c) => c.id === activeConnectionId.value);
+    let selected = supportedConnections.find((c) => c.id === activeConnectionId.value);
     if (!selected) {
       selected =
-        openaiConnections.find((c) => String(c.config?.openaiProject || '').trim().length > 0) ?? openaiConnections[0];
+        supportedConnections.find((c) => String(c.config?.openaiProject || '').trim().length > 0) ?? supportedConnections[0];
     }
 
     activeConnectionId.value = selected.id;
+    activeProvider.value = selected.provider;
     activeProjectId.value = String(selected.config?.openaiProject || '').trim();
     persistDashboardCache();
   } catch {
     hasConnections.value = false;
     activeConnectionId.value = '';
+    activeProvider.value = 'openai';
     activeProjectId.value = '';
   }
 }
@@ -586,7 +595,7 @@ async function queryUsage() {
     p.set('granularity', 'hour');
     p.set('start', filters.value.start);
     p.set('end', filters.value.end);
-    p.set('provider', 'openai');
+    p.set('provider', activeProvider.value);
     if (activeConnectionId.value) p.set('connectionId', activeConnectionId.value);
     if (activeProjectId.value) p.set('projectId', activeProjectId.value);
 
@@ -602,13 +611,13 @@ async function queryUsage() {
 
 async function refreshUsage() {
   if (!hasConnections.value) {
-    message.value = 'No OpenAI connection yet. Go to Connections to create one.';
+    message.value = 'No connection yet. Go to Connections to create one.';
     return;
   }
   if (!activeConnectionId.value) {
     await loadConnectionContext();
     if (!activeConnectionId.value) {
-      message.value = 'No OpenAI connection yet. Go to Connections to create one.';
+      message.value = 'No connection yet. Go to Connections to create one.';
       return;
     }
   }
@@ -736,7 +745,7 @@ async function onConnectionsChanged(event: Event) {
   await loadConnectionContext();
   if (!hasConnections.value) {
     clearDashboardCache();
-    message.value = 'No OpenAI connection yet. Go to Connections to create one.';
+    message.value = 'No connection yet. Go to Connections to create one.';
     return;
   }
   if (detail?.action !== 'deleted') {
@@ -759,7 +768,7 @@ onMounted(async () => {
     await queryUsage();
   }
   if (!restored && !hasConnections.value) {
-    message.value = 'No OpenAI connection yet. Go to Connections to create one.';
+    message.value = 'No connection yet. Go to Connections to create one.';
   }
 });
 
@@ -790,7 +799,7 @@ onBeforeUnmount(() => {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(148, 163, 184, 0.3);
+  background: rgba(100, 116, 139, 0.48);
   border-radius: 14px;
   z-index: 12;
 }
