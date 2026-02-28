@@ -4,9 +4,54 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TokenSun</title>
+    <style>
+      html,
+      body,
+      #app {
+        min-height: 2800px;
+      }
+    </style>
+    <script>
+      (function () {
+        var RESIZE_TOPIC = 'PLUGIN_TOPIC_RESIZE_IFRAME';
+        var VIEW_LOADED_TOPIC = 'PLUGIN_TOPIC_VIEW_LOADED';
+        var STORAGE_KEY = 'tokensun.iframe.maxHeight';
+        var fallbackMin = 2800;
+        var restored = Number(sessionStorage.getItem(STORAGE_KEY) || 0);
+        var target = Math.max(fallbackMin, Number.isFinite(restored) ? restored : 0);
+
+        function post(topic, height) {
+          if (height != null) {
+            var payloads = [
+              { topic: topic, data: { height: height } },
+              { type: topic, data: { height: height } },
+              { topic: topic, height: height },
+              { type: topic, height: height },
+              { topic: topic, payload: { height: height } },
+              { type: topic, payload: { height: height } }
+            ];
+            for (var i = 0; i < payloads.length; i += 1) window.parent && window.parent.postMessage(payloads[i], '*');
+            return;
+          }
+          window.parent && window.parent.postMessage({ topic: topic }, '*');
+          window.parent && window.parent.postMessage({ type: topic }, '*');
+        }
+
+        post(VIEW_LOADED_TOPIC);
+        post(RESIZE_TOPIC, target);
+
+        var attempts = 0;
+        var timer = window.setInterval(function () {
+          attempts += 1;
+          post(VIEW_LOADED_TOPIC);
+          post(RESIZE_TOPIC, target);
+          if (attempts >= 20) window.clearInterval(timer);
+        }, 150);
+      })();
+    </script>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">Loading...</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
