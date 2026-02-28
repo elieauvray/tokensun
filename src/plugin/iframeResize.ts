@@ -3,7 +3,7 @@ import type { Router } from 'vue-router';
 const RESIZE_TOPIC = 'PLUGIN_TOPIC_RESIZE_IFRAME';
 const VIEW_LOADED_TOPIC = 'PLUGIN_TOPIC_VIEW_LOADED';
 const MAX_HEIGHT_SESSION_KEY = 'tokensun.iframe.maxHeight';
-const MIN_IFRAME_HEIGHT = 2600;
+const MIN_IFRAME_HEIGHT = 8200;
 
 function measureContentHeight(): number {
   const body = document.body;

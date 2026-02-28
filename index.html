@@ -8,7 +8,7 @@
       html,
       body,
       #app {
-        min-height: 2800px;
+        min-height: 8200px;
       }
     </style>
     <script>
@@ -16,7 +16,7 @@
         var RESIZE_TOPIC = 'PLUGIN_TOPIC_RESIZE_IFRAME';
         var VIEW_LOADED_TOPIC = 'PLUGIN_TOPIC_VIEW_LOADED';
         var STORAGE_KEY = 'tokensun.iframe.maxHeight';
-        var fallbackMin = 2800;
+        var fallbackMin = 8200;
         var restored = Number(sessionStorage.getItem(STORAGE_KEY) || 0);
         var target = Math.max(fallbackMin, Number.isFinite(restored) ? restored : 0);
 
