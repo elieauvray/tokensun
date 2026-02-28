@@ -98,8 +98,14 @@ export function buildServer() {
   }
 
   app.setNotFoundHandler(async (req, reply) => {
-    if (req.url.startsWith('/api/')) {
+    const path = req.url.split('?')[0] ?? req.url;
+    if (path.startsWith('/api/')) {
       reply.code(404).send({ error: 'not_found' });
+      return;
+    }
+    const isStaticAssetPath = path.startsWith('/assets/') || /\.[A-Za-z0-9]+$/.test(path);
+    if (isStaticAssetPath) {
+      reply.code(404).type('application/json; charset=utf-8').send({ error: 'asset_not_found', path });
       return;
     }
     return reply.sendFile('index.html');

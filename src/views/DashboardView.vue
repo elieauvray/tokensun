@@ -1,168 +1,167 @@
 <template>
   <section class="usage-page">
-    <header class="usage-topbar">
-      <h1 class="usage-title">Usage</h1>
-      <div class="usage-actions">
-        <span class="usage-project-pill">
-          {{ activeProjectId ? `Project ${activeProjectId}` : 'Project not set' }}
-        </span>
-
-        <button type="button" class="range-trigger" @click="toggleRangePicker">
-          <span class="range-icon">🗓</span>
-          <span>{{ rangeLabel }}</span>
-        </button>
-
-        <Button label="Refresh" :loading="refreshing" :disabled="refreshing || querying || !hasConnections" @click="refreshUsage" />
-        <a :href="csvHref" class="usage-export" target="_blank" rel="noreferrer">Export</a>
-      </div>
-    </header>
-
-    <div v-if="showRangePicker" class="range-popover">
-      <aside class="range-presets">
-        <button v-for="preset in presets" :key="preset.value" type="button" class="preset-btn" @click="applyPreset(preset.value)">
-          {{ preset.label }}
-        </button>
-      </aside>
-      <div class="range-calendar">
-        <Calendar
-          v-model="rangeSelection"
-          selectionMode="range"
-          :inline="true"
-          :numberOfMonths="2"
-          dateFormat="mm/dd/yy"
-          @date-select="onRangeSelect"
-        />
-        <div class="range-footer">
-          <Button label="Apply range" size="small" @click="applyRangeOnly" />
-        </div>
-      </div>
-    </div>
-
     <article v-if="!hasConnections" class="connect-callout">
       <div>
         <h2>No OpenAI connection configured</h2>
         <p>Create a connection first to load usage and spend data from the OpenAI API.</p>
       </div>
-      <RouterLink to="/connections" class="connect-callout-btn">Go to Connections</RouterLink>
     </article>
 
-    <p v-if="message" class="usage-msg">{{ message }}</p>
+    <div class="usage-shell" :class="{ 'usage-shell-dimmed': !hasConnections }">
+      <header class="usage-topbar">
+        <h1 class="usage-title">Usage</h1>
+        <div class="usage-actions">
+          <span class="usage-project-pill">
+            {{ activeProjectId ? `Project ${activeProjectId}` : 'Project not set' }}
+          </span>
 
-    <section class="usage-main">
-      <article class="usage-chart-card">
-        <div class="usage-spend">
-          <p>Total Spend</p>
-          <h2>{{ usd(totalSpend) }}</h2>
+          <button type="button" class="range-trigger" @click="toggleRangePicker">
+            <span class="range-icon">🗓</span>
+            <span>{{ rangeLabel }}</span>
+          </button>
+
+          <Button label="Refresh" :loading="refreshing" :disabled="refreshing || querying || !hasConnections" @click="refreshUsage" />
+          <a :href="csvHref" class="usage-export" target="_blank" rel="noreferrer">Export</a>
         </div>
-        <div class="usage-chart-wrap">
-          <canvas ref="canvasRef" height="170"></canvas>
-        </div>
-      </article>
+      </header>
 
-      <aside class="usage-side">
-        <article class="usage-side-card">
-          <p class="usage-side-label">Monthly budget</p>
-          <p class="usage-side-value">{{ usd(totalSpend) }} / {{ usd(monthlyBudgetUsd) }}</p>
-          <div class="usage-progress">
-            <div class="usage-progress-fill" :style="{ width: `${budgetPercent}%` }"></div>
-          </div>
-        </article>
-        <article class="usage-side-card">
-          <p class="usage-side-label">Total tokens</p>
-          <p class="usage-side-value">{{ compact(totalTokens) }}</p>
-          <div class="usage-side-line usage-side-line-tokens"></div>
-        </article>
-        <article class="usage-side-card">
-          <p class="usage-side-label">Total requests</p>
-          <p class="usage-side-value">{{ compact(totalRequests) }}</p>
-          <div class="usage-side-line"></div>
-        </article>
-      </aside>
-    </section>
-
-    <section class="usage-tabs">
-      <button type="button" class="usage-tab" :class="{ 'usage-tab-active': activeTab === 'capabilities' }" @click="activeTab = 'capabilities'">
-        API capabilities
-      </button>
-      <button type="button" class="usage-tab" :class="{ 'usage-tab-active': activeTab === 'spend' }" @click="activeTab = 'spend'">
-        Spend categories
-      </button>
-    </section>
-
-    <section v-if="activeTab === 'capabilities'" class="cap-grid">
-      <article v-for="card in capabilityCards" :key="card.key" class="cap-card">
-        <header class="cap-head">
-          <h3>{{ card.title }}</h3>
-          <span>›</span>
-        </header>
-        <p class="cap-meta">
-          <span>{{ compact(card.requests) }} requests</span>
-          <span>{{ compact(card.secondaryValue) }} {{ card.secondaryLabel }}</span>
-        </p>
-        <div class="cap-chart" @mouseleave="hideCardTooltip(card.key)">
-          <div class="cap-line"></div>
-          <button
-            v-for="point in card.points"
-            :key="`${card.key}-${point.date}`"
-            type="button"
-            class="cap-stick cap-stick-hit"
-            :style="{ left: `${point.left}%`, height: `${point.height}px` }"
-            @mouseenter="showCardTooltip($event, card.key, card.title, point.date, point.value, 'number')"
-          ></button>
-        </div>
-        <footer class="cap-foot">
-          <span>{{ shortDate(filters.start) }}</span>
-          <span>{{ shortDate(filters.end) }}</span>
-        </footer>
-        <div v-if="hoverTooltip?.cardKey === card.key" class="cap-tooltip" :style="{ left: `${hoverTooltip.left}px` }">
-          <p class="cap-tooltip-date">{{ hoverTooltip.dateLabel }}</p>
-          <div class="cap-tooltip-row">
-            <span class="cap-tooltip-dot"></span>
-            <span class="cap-tooltip-name">{{ hoverTooltip.label }}</span>
-            <span class="cap-tooltip-val">{{ hoverTooltip.valueLabel }}</span>
+      <div v-if="showRangePicker" class="range-popover">
+        <aside class="range-presets">
+          <button v-for="preset in presets" :key="preset.value" type="button" class="preset-btn" @click="applyPreset(preset.value)">
+            {{ preset.label }}
+          </button>
+        </aside>
+        <div class="range-calendar">
+          <Calendar
+            v-model="rangeSelection"
+            selectionMode="range"
+            :inline="true"
+            :numberOfMonths="2"
+            dateFormat="mm/dd/yy"
+            @date-select="onRangeSelect"
+          />
+          <div class="range-footer">
+            <Button label="Apply range" size="small" @click="applyRangeOnly" />
           </div>
         </div>
-      </article>
-    </section>
+      </div>
 
-    <section v-else class="cap-grid">
-      <article v-for="card in spendCards" :key="card.key" class="cap-card">
-        <header class="cap-head">
-          <h3>{{ card.title }}</h3>
-          <span>›</span>
-        </header>
-        <p class="cap-meta">
-          <span>{{ usd(card.total) }} total</span>
-        </p>
-        <p class="cap-strong">{{ usd(card.peak) }}</p>
-        <div class="cap-chart" @mouseleave="hideCardTooltip(card.key)">
-          <div class="cap-line"></div>
-          <button
-            v-for="point in card.points"
-            :key="`${card.key}-${point.date}`"
-            type="button"
-            class="cap-stick cap-stick-hit"
-            :style="{ left: `${point.left}%`, height: `${point.height}px` }"
-            @mouseenter="showCardTooltip($event, card.key, card.title, point.date, point.value, 'currency')"
-          ></button>
-        </div>
-        <footer class="cap-foot">
-          <span>{{ shortDate(filters.start) }}</span>
-          <span>{{ shortDate(filters.end) }}</span>
-        </footer>
-        <div v-if="hoverTooltip?.cardKey === card.key" class="cap-tooltip" :style="{ left: `${hoverTooltip.left}px` }">
-          <p class="cap-tooltip-date">{{ hoverTooltip.dateLabel }}</p>
-          <div class="cap-tooltip-row">
-            <span class="cap-tooltip-dot"></span>
-            <span class="cap-tooltip-name">{{ hoverTooltip.label }}</span>
-            <span class="cap-tooltip-val">{{ hoverTooltip.valueLabel }}</span>
+      <p v-if="message" class="usage-msg">{{ message }}</p>
+
+      <section class="usage-main">
+        <article class="usage-chart-card">
+          <div class="usage-spend">
+            <p>Total Spend</p>
+            <h2>{{ usd(totalSpend) }}</h2>
           </div>
-        </div>
-      </article>
-      <article v-if="spendCards.length === 0" class="cap-card cap-empty">
-        No spend data for this range.
-      </article>
-    </section>
+          <div class="usage-chart-wrap">
+            <canvas ref="canvasRef" height="170"></canvas>
+          </div>
+        </article>
+
+        <aside class="usage-side">
+          <article class="usage-side-card">
+            <p class="usage-side-label">Monthly budget</p>
+            <p class="usage-side-value">{{ usd(totalSpend) }} / {{ usd(monthlyBudgetUsd) }}</p>
+            <div class="usage-progress">
+              <div class="usage-progress-fill" :style="{ width: `${budgetPercent}%` }"></div>
+            </div>
+          </article>
+          <article class="usage-side-card">
+            <p class="usage-side-label">Total tokens</p>
+            <p class="usage-side-value">{{ compact(totalTokens) }}</p>
+            <div class="usage-side-line usage-side-line-tokens"></div>
+          </article>
+          <article class="usage-side-card">
+            <p class="usage-side-label">Total requests</p>
+            <p class="usage-side-value">{{ compact(totalRequests) }}</p>
+            <div class="usage-side-line"></div>
+          </article>
+        </aside>
+      </section>
+
+      <section class="usage-tabs">
+        <button type="button" class="usage-tab" :class="{ 'usage-tab-active': activeTab === 'capabilities' }" @click="activeTab = 'capabilities'">
+          API capabilities
+        </button>
+        <button type="button" class="usage-tab" :class="{ 'usage-tab-active': activeTab === 'spend' }" @click="activeTab = 'spend'">
+          Spend categories
+        </button>
+      </section>
+
+      <section v-if="activeTab === 'capabilities'" class="cap-grid">
+        <article v-for="card in capabilityCards" :key="card.key" class="cap-card">
+          <header class="cap-head">
+            <h3>{{ card.title }}</h3>
+          </header>
+          <p class="cap-meta">
+            <span>{{ compact(card.requests) }} requests</span>
+            <span>{{ compact(card.secondaryValue) }} {{ card.secondaryLabel }}</span>
+          </p>
+          <div class="cap-chart" @mouseleave="hideCardTooltip(card.key)">
+            <div class="cap-line"></div>
+            <button
+              v-for="point in card.points"
+              :key="`${card.key}-${point.date}`"
+              type="button"
+              class="cap-stick cap-stick-hit"
+              :style="{ left: `${point.left}%`, height: `${point.height}px` }"
+              @mouseenter="showCardTooltip($event, card.key, card.title, point.date, point.value, 'number')"
+            ></button>
+          </div>
+          <footer class="cap-foot">
+            <span>{{ shortDate(filters.start) }}</span>
+            <span>{{ shortDate(filters.end) }}</span>
+          </footer>
+          <div v-if="hoverTooltip?.cardKey === card.key" class="cap-tooltip" :style="{ left: `${hoverTooltip.left}px` }">
+            <p class="cap-tooltip-date">{{ hoverTooltip.dateLabel }}</p>
+            <div class="cap-tooltip-row">
+              <span class="cap-tooltip-dot"></span>
+              <span class="cap-tooltip-name">{{ hoverTooltip.label }}</span>
+              <span class="cap-tooltip-val">{{ hoverTooltip.valueLabel }}</span>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section v-else class="cap-grid">
+        <article v-for="card in spendCards" :key="card.key" class="cap-card">
+          <header class="cap-head">
+            <h3>{{ card.title }}</h3>
+          </header>
+          <p class="cap-meta">
+            <span>{{ usd(card.total) }} total</span>
+          </p>
+          <p class="cap-strong">{{ usd(card.peak) }}</p>
+          <div class="cap-chart" @mouseleave="hideCardTooltip(card.key)">
+            <div class="cap-line"></div>
+            <button
+              v-for="point in card.points"
+              :key="`${card.key}-${point.date}`"
+              type="button"
+              class="cap-stick cap-stick-hit"
+              :style="{ left: `${point.left}%`, height: `${point.height}px` }"
+              @mouseenter="showCardTooltip($event, card.key, card.title, point.date, point.value, 'currency')"
+            ></button>
+          </div>
+          <footer class="cap-foot">
+            <span>{{ shortDate(filters.start) }}</span>
+            <span>{{ shortDate(filters.end) }}</span>
+          </footer>
+          <div v-if="hoverTooltip?.cardKey === card.key" class="cap-tooltip" :style="{ left: `${hoverTooltip.left}px` }">
+            <p class="cap-tooltip-date">{{ hoverTooltip.dateLabel }}</p>
+            <div class="cap-tooltip-row">
+              <span class="cap-tooltip-dot"></span>
+              <span class="cap-tooltip-name">{{ hoverTooltip.label }}</span>
+              <span class="cap-tooltip-val">{{ hoverTooltip.valueLabel }}</span>
+            </div>
+          </div>
+        </article>
+        <article v-if="spendCards.length === 0" class="cap-card cap-empty">
+          No spend data for this range.
+        </article>
+      </section>
+    </div>
   </section>
 </template>
 
@@ -777,6 +776,25 @@ onBeforeUnmount(() => {
   position: relative;
 }
 
+.usage-shell {
+  display: grid;
+  gap: 14px;
+  position: relative;
+}
+
+.usage-shell-dimmed {
+  pointer-events: none;
+}
+
+.usage-shell-dimmed::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 14px;
+  z-index: 12;
+}
+
 .usage-topbar {
   display: flex;
   align-items: center;
@@ -902,7 +920,7 @@ onBeforeUnmount(() => {
 .connect-callout {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 16px;
   border: 1px solid #c4b5fd;
   background: linear-gradient(90deg, #faf5ff, #f5f3ff);
@@ -919,16 +937,6 @@ onBeforeUnmount(() => {
   margin: 4px 0 0;
   color: #5b6074;
   font-size: 13px;
-}
-
-.connect-callout-btn {
-  text-decoration: none;
-  color: #fff;
-  background: #7c3aed;
-  border-radius: 10px;
-  padding: 10px 14px;
-  font-weight: 600;
-  white-space: nowrap;
 }
 
 .usage-main {
