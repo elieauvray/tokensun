@@ -88,7 +88,7 @@ const batchOptions = [
   { label: 'false', value: 'false' }
 ];
 const now = new Date();
-const ago = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+const ago = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
 const filters = reactive({
   granularity: 'hour',
@@ -219,7 +219,7 @@ async function queryUsage(options?: { suppressSuccessMessage?: boolean }) {
 
 watch(rows, renderChart);
 onMounted(async () => {
-  await queryUsage();
+  await refreshUsage();
 });
 </script>
 
