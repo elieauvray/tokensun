@@ -114,13 +114,13 @@
           </div>
           <div class="cap-chart" @mouseleave="hideCardTooltip(card.key)">
             <div class="cap-line"></div>
-            <template v-for="series in card.series" :key="`${card.key}-${series.connectionId}-sticks`">
+            <template v-for="(series, seriesIndex) in card.series" :key="`${card.key}-${series.connectionId}-sticks`">
               <button
                 v-for="point in series.points"
                 :key="`${card.key}-${series.connectionId}-${point.date}`"
                 type="button"
                 class="cap-stick cap-stick-hit"
-                :style="{ left: `${point.left}%`, height: `${point.height}px`, backgroundColor: series.color }"
+                :style="stickStyle(point, seriesIndex, card.series.length, series.color)"
                 @mouseenter="showCardTooltip($event, card.key, `${card.title} (${series.label})`, point.date, point.value, 'number', series.color)"
               ></button>
             </template>
@@ -157,13 +157,13 @@
           </div>
           <div class="cap-chart" @mouseleave="hideCardTooltip(card.key)">
             <div class="cap-line"></div>
-            <template v-for="series in card.series" :key="`${card.key}-${series.connectionId}-sticks`">
+            <template v-for="(series, seriesIndex) in card.series" :key="`${card.key}-${series.connectionId}-sticks`">
               <button
                 v-for="point in series.points"
                 :key="`${card.key}-${series.connectionId}-${point.date}`"
                 type="button"
                 class="cap-stick cap-stick-hit"
-                :style="{ left: `${point.left}%`, height: `${point.height}px`, backgroundColor: series.color }"
+                :style="stickStyle(point, seriesIndex, card.series.length, series.color)"
                 @mouseenter="showCardTooltip($event, card.key, `${card.title} (${series.label})`, point.date, point.value, 'currency', series.color)"
               ></button>
             </template>
@@ -305,11 +305,11 @@ const rangeLabel = computed(() => {
 });
 
 const providerMeta: Record<ProviderKey, { label: string; color: string; fill: string }> = {
-  openai: { label: 'OpenAI', color: '#6d4aff', fill: 'rgba(109,74,255,0.16)' },
-  fake: { label: 'Fake', color: '#0ea5a1', fill: 'rgba(14,165,161,0.18)' },
-  anthropic: { label: 'Anthropic', color: '#f59e0b', fill: 'rgba(245,158,11,0.18)' },
-  gemini: { label: 'Gemini', color: '#3b82f6', fill: 'rgba(59,130,246,0.18)' },
-  mistral: { label: 'Mistral', color: '#ef4444', fill: 'rgba(239,68,68,0.18)' }
+  openai: { label: 'OpenAI', color: '#5b4ee6', fill: 'rgba(91,78,230,0.16)' },
+  fake: { label: 'Fake', color: '#3f5f8a', fill: 'rgba(63,95,138,0.16)' },
+  anthropic: { label: 'Anthropic', color: '#7a63d6', fill: 'rgba(122,99,214,0.16)' },
+  gemini: { label: 'Gemini', color: '#4c6fb3', fill: 'rgba(76,111,179,0.16)' },
+  mistral: { label: 'Mistral', color: '#6b7a95', fill: 'rgba(107,122,149,0.16)' }
 };
 
 const rows = computed(() => {
@@ -444,7 +444,7 @@ function hashString(value: string): number {
 }
 
 function connectionColor(connectionId: string): string {
-  const palette = ['#6d4aff', '#0ea5a1', '#f59e0b', '#3b82f6', '#ef4444', '#22c55e', '#d946ef', '#f97316'];
+  const palette = ['#5b4ee6', '#4c6fb3', '#6b7a95', '#7a63d6', '#3f5f8a', '#6978c9', '#586a84', '#7b6aa8'];
   return palette[hashString(connectionId) % palette.length];
 }
 
@@ -516,6 +516,18 @@ function buildSeries(byConnection: Map<string, Map<string, number>>): MiniSeries
         points: buildMiniPoints(byDay)
       };
     });
+}
+
+function stickStyle(point: MiniPoint, seriesIndex: number, seriesCount: number, color: string) {
+  const spread = Math.min(12, Math.max(0, (seriesCount - 1) * 4));
+  const step = seriesCount > 1 ? spread / (seriesCount - 1) : 0;
+  const offset = -spread / 2 + seriesIndex * step;
+  return {
+    left: `calc(${point.left}% + ${offset}px)`,
+    height: `${Math.max(8, point.height)}px`,
+    backgroundColor: color,
+    zIndex: String(10 + seriesIndex)
+  };
 }
 
 function showCardTooltip(
