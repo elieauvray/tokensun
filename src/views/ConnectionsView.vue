@@ -31,11 +31,14 @@
       <div class="console-panel-body">
         <DataTable :value="connections" size="small" stripedRows>
           <Column field="provider" header="Provider" />
-          <Column field="name" header="Name" />
-          <Column field="slug" header="Conn" />
-          <Column header="Secrets">
+          <Column header="Project ID">
             <template #body="slotProps">
-              {{ slotProps.data.hasSecrets ? 'Saved' : 'Missing' }}
+              {{ slotProps.data?.config?.openaiProject || '—' }}
+            </template>
+          </Column>
+          <Column header="Base URL">
+            <template #body="slotProps">
+              {{ slotProps.data?.config?.baseUrl || '—' }}
             </template>
           </Column>
           <Column header="Actions">
