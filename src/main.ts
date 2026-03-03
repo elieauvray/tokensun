@@ -16,10 +16,19 @@ if (!mountTarget) {
   throw new Error('Failed to resolve app mount target');
 }
 
+const appRoot = document.getElementById('app');
+if (appRoot) {
+  appRoot.textContent = 'text';
+  appRoot.classList.add('iframe-preload-debug');
+}
+
 postPreloadIframeHeight();
 
-const app = createApp(App);
-app.use(router);
-app.use(PrimeVue);
-app.mount(mountTarget);
-initIframeAutoResize(router);
+window.setTimeout(() => {
+  const app = createApp(App);
+  app.use(router);
+  app.use(PrimeVue);
+  app.mount(mountTarget);
+  initIframeAutoResize(router);
+  appRoot?.classList.remove('iframe-preload-debug');
+}, 800);

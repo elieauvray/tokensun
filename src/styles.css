@@ -30,6 +30,15 @@ body {
   color: var(--ups-text);
 }
 
+#app.iframe-preload-debug {
+  min-height: 2400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
 .console-layout {
   width: 100%;
   min-height: 100vh;
