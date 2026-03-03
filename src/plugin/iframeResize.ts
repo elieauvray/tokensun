@@ -25,39 +25,12 @@ function postResize(height: number): void {
     // Keep fallback postMessage flow below.
   }
 
-  for (const topic of RESIZE_TOPICS) {
-    const payloads: unknown[] = [
-      { action: topic, data: height },
-      { action: topic, data: { height } },
-      { topic, data: { height } },
-      { type: topic, data: { height } },
-      { topic, height },
-      { type: topic, height },
-      { topic, payload: { height } },
-      { type: topic, payload: { height } },
-      { topic, value: { height } },
-      { type: topic, value: { height } }
-    ];
-    for (const payload of payloads) {
-      window.parent?.postMessage(payload, '*');
-    }
-  }
+  // Canonical fallback payload only.
+  window.parent?.postMessage({ action: 'PLUGINS_RESIZE_IFRAME', data: height }, '*');
 }
 
 function postViewLoaded(): void {
-  for (const topic of VIEW_LOADED_TOPICS) {
-    const payloads: unknown[] = [
-      { action: topic, data: true },
-      { action: topic, data: {} },
-      { topic },
-      { type: topic },
-      { topic, data: {} },
-      { type: topic, data: {} }
-    ];
-    for (const payload of payloads) {
-      window.parent?.postMessage(payload, '*');
-    }
-  }
+  window.parent?.postMessage({ action: 'PLUGIN_TOPIC_VIEW_LOADED', data: true }, '*');
 }
 
 export function postPreloadIframeHeight(height = PRELOAD_IFRAME_HEIGHT): void {
