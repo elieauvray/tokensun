@@ -30,18 +30,16 @@ body {
   color: var(--ups-text);
 }
 
-#app.iframe-preload-debug {
-  min-height: 2400px;
+.loading-container {
   display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  padding: 20px;
-  font-size: 2rem;
-  font-weight: 700;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
 }
 
-#iframe-preload-debug-label {
-  transition: transform 260ms linear;
+.loading-content {
+  text-align: center;
+  padding: 2rem;
 }
 
 .console-layout {
