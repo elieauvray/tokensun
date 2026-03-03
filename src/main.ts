@@ -2,7 +2,7 @@ import { createApp } from 'vue';
 import PrimeVue from 'primevue/config';
 import App from './App.vue';
 import router from './router';
-import { initIframeAutoResize } from './plugin/iframeResize';
+import { initIframeAutoResize, postPreloadIframeHeight } from './plugin/iframeResize';
 
 import 'primevue/resources/themes/lara-light-blue/theme.css';
 import 'primevue/resources/primevue.min.css';
@@ -15,6 +15,8 @@ const mountTarget = (
 if (!mountTarget) {
   throw new Error('Failed to resolve app mount target');
 }
+
+postPreloadIframeHeight();
 
 const app = createApp(App);
 app.use(router);

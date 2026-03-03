@@ -3,6 +3,7 @@ import type { Router } from 'vue-router';
 const RESIZE_TOPICS = ['PLUGIN_TOPIC_RESIZE_IFRAME', 'PLUGINS_RESIZE_IFRAME'] as const;
 const VIEW_LOADED_TOPICS = ['PLUGIN_TOPIC_VIEW_LOADED', 'VIEW_LOADED'] as const;
 const MIN_IFRAME_HEIGHT = 1200;
+const PRELOAD_IFRAME_HEIGHT = 2400;
 
 function measureContentHeight(): number {
   const body = document.body;
@@ -47,6 +48,14 @@ function postViewLoaded(): void {
       window.parent?.postMessage(payload, '*');
     }
   }
+}
+
+export function postPreloadIframeHeight(): void {
+  postResize(PRELOAD_IFRAME_HEIGHT);
+  postViewLoaded();
+  window.setTimeout(() => postResize(PRELOAD_IFRAME_HEIGHT), 0);
+  window.setTimeout(() => postResize(PRELOAD_IFRAME_HEIGHT), 80);
+  window.setTimeout(() => postResize(PRELOAD_IFRAME_HEIGHT), 260);
 }
 
 export function initIframeAutoResize(router: Router): void {
