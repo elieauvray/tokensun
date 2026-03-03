@@ -1,6 +1,6 @@
 <template>
   <div class="console-layout">
-    <div v-if="isBootLoading" class="loading-container">
+    <div v-if="isBootLoading" class="loading-container" :style="{ minHeight: `${bootHeight}px` }">
       <div class="loading-content">
         <ProgressSpinner style="width: 60px; height: 60px" strokeWidth="4" fill="transparent" animationDuration="1s" />
       </div>
@@ -32,6 +32,7 @@ import { postPreloadIframeHeight } from './plugin/iframeResize';
 
 const hasConnections = ref(true);
 const isBootLoading = ref(true);
+const bootHeight = ref(900);
 const app = getCurrentInstance()?.appContext.app;
 if (app) {
   app.config.globalProperties.toast_duration = 5000;
@@ -53,12 +54,15 @@ async function onConnectionsChanged() {
 
 onMounted(async () => {
   pluginSDK = getPluginSDK();
-  [900, 1300, 1700, 2100, 2400].forEach((height, index) => {
-    window.setTimeout(() => postPreloadIframeHeight(height), index * 120);
+  [900, 1400, 2000, 2800, 3600].forEach((height, index) => {
+    window.setTimeout(() => {
+      bootHeight.value = height;
+      postPreloadIframeHeight(height);
+    }, index * 150);
   });
   window.setTimeout(() => {
     isBootLoading.value = false;
-  }, 900);
+  }, 1200);
   window.addEventListener('tokensun:connections-changed', onConnectionsChanged);
   await refreshConnectionState();
 });
