@@ -28,10 +28,11 @@ import { getCurrentInstance, onMounted, onUnmounted, ref } from 'vue';
 import { getPluginSDK } from 'pluginapp-sdk-node';
 import ProgressSpinner from 'primevue/progressspinner';
 import { api } from './components/api';
+import { postPreloadIframeHeight } from './plugin/iframeResize';
 
 const hasConnections = ref(true);
 const isBootLoading = ref(true);
-const ignitionHeight = 3600;
+const ignitionHeight = 5200;
 const app = getCurrentInstance()?.appContext.app;
 if (app) {
   app.config.globalProperties.toast_duration = 5000;
@@ -53,9 +54,10 @@ async function onConnectionsChanged() {
 
 onMounted(async () => {
   pluginSDK = getPluginSDK();
+  postPreloadIframeHeight(5200);
   window.setTimeout(() => {
     isBootLoading.value = false;
-  }, 1100);
+  }, 1600);
   window.addEventListener('tokensun:connections-changed', onConnectionsChanged);
   await refreshConnectionState();
 });
