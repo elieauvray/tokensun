@@ -18,11 +18,23 @@ if (!mountTarget) {
 
 const appRoot = document.getElementById('app');
 if (appRoot) {
-  appRoot.innerHTML = '<div>text</div><div>text</div>';
+  appRoot.innerHTML = '<div id="iframe-preload-debug-label">text</div>';
   appRoot.classList.add('iframe-preload-debug');
 }
 
-postPreloadIframeHeight();
+const preloadSteps = [900, 1300, 1700, 2100, 2400];
+const debugLabel = document.getElementById('iframe-preload-debug-label');
+const maxTravel = Math.min(window.innerHeight * 0.7, 700);
+
+preloadSteps.forEach((height, index) => {
+  window.setTimeout(() => {
+    postPreloadIframeHeight(height);
+    if (debugLabel) {
+      const progress = (index + 1) / preloadSteps.length;
+      debugLabel.style.transform = `translateY(${Math.round(progress * maxTravel)}px)`;
+    }
+  }, index * 320);
+});
 
 window.setTimeout(() => {
   const app = createApp(App);

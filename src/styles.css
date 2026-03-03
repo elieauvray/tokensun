@@ -33,12 +33,15 @@ body {
 #app.iframe-preload-debug {
   min-height: 2400px;
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 0;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 20px;
   font-size: 2rem;
   font-weight: 700;
+}
+
+#iframe-preload-debug-label {
+  transition: transform 260ms linear;
 }
 
 .console-layout {

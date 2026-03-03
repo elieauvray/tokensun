@@ -50,12 +50,12 @@ function postViewLoaded(): void {
   }
 }
 
-export function postPreloadIframeHeight(): void {
-  postResize(PRELOAD_IFRAME_HEIGHT);
+export function postPreloadIframeHeight(height = PRELOAD_IFRAME_HEIGHT): void {
+  postResize(height);
   postViewLoaded();
-  window.setTimeout(() => postResize(PRELOAD_IFRAME_HEIGHT), 0);
-  window.setTimeout(() => postResize(PRELOAD_IFRAME_HEIGHT), 80);
-  window.setTimeout(() => postResize(PRELOAD_IFRAME_HEIGHT), 260);
+  window.setTimeout(() => postResize(height), 0);
+  window.setTimeout(() => postResize(height), 80);
+  window.setTimeout(() => postResize(height), 260);
 }
 
 export function initIframeAutoResize(router: Router): void {
