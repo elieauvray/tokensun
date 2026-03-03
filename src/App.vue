@@ -63,6 +63,9 @@ onMounted(async () => {
   window.setTimeout(() => {
     isBootLoading.value = false;
   }, 1200);
+  window.setTimeout(() => {
+    postPreloadIframeHeight(3200);
+  }, 1400);
   window.addEventListener('tokensun:connections-changed', onConnectionsChanged);
   await refreshConnectionState();
 });
