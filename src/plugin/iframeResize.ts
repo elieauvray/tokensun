@@ -2,8 +2,8 @@ import type { Router } from 'vue-router';
 
 const RESIZE_TOPICS = ['PLUGIN_TOPIC_RESIZE_IFRAME', 'PLUGINS_RESIZE_IFRAME'] as const;
 const VIEW_LOADED_TOPICS = ['PLUGIN_TOPIC_VIEW_LOADED', 'VIEW_LOADED'] as const;
-const MIN_IFRAME_HEIGHT = 3200;
-const PRELOAD_IFRAME_HEIGHT = 4200;
+const MIN_IFRAME_HEIGHT = 900;
+const PRELOAD_IFRAME_HEIGHT = 3600;
 
 function measureContentHeight(): number {
   const body = document.body;
