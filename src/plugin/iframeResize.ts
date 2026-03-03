@@ -1,4 +1,5 @@
 import type { Router } from 'vue-router';
+import { getPluginSDK, PLUGIN_TOPIC_RESIZE_IFRAME } from 'pluginapp-sdk-node';
 
 const RESIZE_TOPICS = ['PLUGIN_TOPIC_RESIZE_IFRAME', 'PLUGINS_RESIZE_IFRAME'] as const;
 const VIEW_LOADED_TOPICS = ['PLUGIN_TOPIC_VIEW_LOADED', 'VIEW_LOADED'] as const;
@@ -15,6 +16,15 @@ function measureContentHeight(): number {
 }
 
 function postResize(height: number): void {
+  try {
+    const sdk = getPluginSDK();
+    const publisher = sdk.bus.createPublisher(PLUGIN_TOPIC_RESIZE_IFRAME);
+    publisher.publish(height);
+    publisher.destroy();
+  } catch {
+    // Keep fallback postMessage flow below.
+  }
+
   for (const topic of RESIZE_TOPICS) {
     const payloads: unknown[] = [
       { action: topic, data: height },
