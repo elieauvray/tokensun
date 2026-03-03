@@ -1,6 +1,6 @@
 <template>
   <div class="console-layout">
-    <div v-if="isBootLoading" class="loading-container">
+    <div v-if="isBootLoading" class="loading-container" :style="{ minHeight: `${ignitionHeight}px` }">
       <div class="loading-content">
         <ProgressSpinner style="width: 60px; height: 60px" strokeWidth="4" fill="transparent" animationDuration="1s" />
       </div>
@@ -28,10 +28,10 @@ import { getCurrentInstance, onMounted, onUnmounted, ref } from 'vue';
 import { getPluginSDK } from 'pluginapp-sdk-node';
 import ProgressSpinner from 'primevue/progressspinner';
 import { api } from './components/api';
-import { postPreloadIframeHeight } from './plugin/iframeResize';
 
 const hasConnections = ref(true);
 const isBootLoading = ref(true);
+const ignitionHeight = 3600;
 const app = getCurrentInstance()?.appContext.app;
 if (app) {
   app.config.globalProperties.toast_duration = 5000;
@@ -53,10 +53,9 @@ async function onConnectionsChanged() {
 
 onMounted(async () => {
   pluginSDK = getPluginSDK();
-  postPreloadIframeHeight(3600);
   window.setTimeout(() => {
     isBootLoading.value = false;
-  }, 1000);
+  }, 1100);
   window.addEventListener('tokensun:connections-changed', onConnectionsChanged);
   await refreshConnectionState();
 });
