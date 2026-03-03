@@ -18,7 +18,7 @@ if (!mountTarget) {
 
 const appRoot = document.getElementById('app');
 if (appRoot) {
-  appRoot.textContent = 'text';
+  appRoot.innerHTML = '<div>text</div><div>text</div>';
   appRoot.classList.add('iframe-preload-debug');
 }
 
@@ -31,4 +31,4 @@ window.setTimeout(() => {
   app.mount(mountTarget);
   initIframeAutoResize(router);
   appRoot?.classList.remove('iframe-preload-debug');
-}, 800);
+}, 2500);

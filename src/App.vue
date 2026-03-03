@@ -20,6 +20,7 @@
 import { getCurrentInstance, onMounted, onUnmounted, ref } from 'vue';
 import { getPluginSDK } from 'pluginapp-sdk-node';
 import { api } from './components/api';
+import { postPreloadIframeHeight } from './plugin/iframeResize';
 
 const hasConnections = ref(true);
 const app = getCurrentInstance()?.appContext.app;
@@ -43,6 +44,7 @@ async function onConnectionsChanged() {
 
 onMounted(async () => {
   pluginSDK = getPluginSDK();
+  postPreloadIframeHeight();
   window.addEventListener('tokensun:connections-changed', onConnectionsChanged);
   await refreshConnectionState();
 });
