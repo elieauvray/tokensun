@@ -25,7 +25,6 @@
 
 <script setup lang="ts">
 import { getCurrentInstance, onMounted, onUnmounted, ref } from 'vue';
-import { getPluginSDK } from 'pluginapp-sdk-node';
 import ProgressSpinner from 'primevue/progressspinner';
 import { api } from './components/api';
 import { postPreloadIframeHeight } from './plugin/iframeResize';
@@ -37,7 +36,6 @@ const app = getCurrentInstance()?.appContext.app;
 if (app) {
   app.config.globalProperties.toast_duration = 5000;
 }
-let pluginSDK: ReturnType<typeof getPluginSDK> | null = null;
 
 async function refreshConnectionState() {
   try {
@@ -53,7 +51,6 @@ async function onConnectionsChanged() {
 }
 
 onMounted(async () => {
-  pluginSDK = getPluginSDK();
   postPreloadIframeHeight(5200);
   window.setTimeout(() => {
     isBootLoading.value = false;
@@ -63,9 +60,6 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  if (pluginSDK) {
-    pluginSDK.destroy();
-  }
   window.removeEventListener('tokensun:connections-changed', onConnectionsChanged);
 });
 </script>
