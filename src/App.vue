@@ -28,6 +28,15 @@ import { getCurrentInstance, onMounted, onUnmounted, ref } from 'vue';
 import ProgressSpinner from 'primevue/progressspinner';
 import { api } from './components/api';
 import { postPreloadIframeHeight } from './plugin/iframeResize';
+import { getPluginSDK } from 'pluginapp-sdk-node';
+
+// Initialize Plugin SDK
+let pluginSDK: ReturnType<typeof getPluginSDK> | null = null;
+
+onMounted(() => {
+  // Initialize the plugin SDK when the component is mounted
+  pluginSDK = getPluginSDK();
+});
 
 const hasConnections = ref(true);
 const isBootLoading = ref(true);
