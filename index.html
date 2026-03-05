@@ -8,7 +8,7 @@
       (function () {
         var RESIZE_TOPIC = 'PLUGIN_TOPIC_RESIZE_IFRAME';
         var VIEW_LOADED_TOPIC = 'PLUGIN_TOPIC_VIEW_LOADED';
-        var target = Math.max(window.innerHeight || 0, 1200);
+        var target = 100000;
 
         function post(topic, height) {
           if (height != null) {

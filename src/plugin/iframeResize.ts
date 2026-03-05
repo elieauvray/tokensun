@@ -2,8 +2,8 @@ import type { Router } from 'vue-router';
 
 const RESIZE_TOPICS = ['PLUGIN_TOPIC_RESIZE_IFRAME', 'PLUGINS_RESIZE_IFRAME'] as const;
 const VIEW_LOADED_TOPICS = ['PLUGIN_TOPIC_VIEW_LOADED', 'VIEW_LOADED'] as const;
-const MIN_IFRAME_HEIGHT = 2000;
-const PRELOAD_IFRAME_HEIGHT = 2000;
+const MAX_IFRAME_REQUEST_HEIGHT = 100000;
+const PRELOAD_IFRAME_HEIGHT = MAX_IFRAME_REQUEST_HEIGHT;
 const RESIZE_DEBUG_PREFIX = '[TokenSun iframe-resize]';
 
 type ResizeSource =
@@ -37,7 +37,7 @@ function debugLogResize(action: string, height: number, source: ResizeSource): v
 }
 
 function postResize(height: number, source: ResizeSource): void {
-  const target = Math.max(MIN_IFRAME_HEIGHT, Math.ceil(height));
+  const target = Math.max(MAX_IFRAME_REQUEST_HEIGHT, Math.ceil(height));
   if (target !== height) {
     console.warn(`${RESIZE_DEBUG_PREFIX} ${nowIso()} clamped`, { source, from: height, to: target });
   }
@@ -74,7 +74,7 @@ export function initIframeAutoResize(router: Router): void {
   const flush = () => {
     raf = 0;
     const measured = measureContentHeight();
-    const target = Math.max(MIN_IFRAME_HEIGHT, measured);
+    const target = Math.max(MAX_IFRAME_REQUEST_HEIGHT, measured);
     if (Math.abs(target - lastPostedHeight) > 1) {
       lastPostedHeight = target;
       postResize(target, scheduledSource);
