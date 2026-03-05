@@ -33,7 +33,7 @@ let pluginSDK: ReturnType<typeof getPluginSDK> | null = null;
 
 const hasConnections = ref(true);
 const isBootLoading = ref(true);
-const ignitionHeight = 5200;
+const ignitionHeight = 100%;
 const app = getCurrentInstance()?.appContext.app;
 if (app) {
   app.config.globalProperties.toast_duration = 5000;
