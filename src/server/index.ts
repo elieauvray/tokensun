@@ -120,7 +120,7 @@ async function start() {
   await migrate();
 
   const app = buildServer();
-  const port = Number(process.env.PORT ?? 8888);
+  const port = Number(process.env.PORT ?? 8080);
   await app.listen({ port, host: '0.0.0.0' });
 }
 
