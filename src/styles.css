@@ -44,7 +44,7 @@ body {
 
 .console-layout {
   width: 100%;
-  min-height: 2000px;
+  min-height: 100%;
   height: auto;
   display: flex;
   flex-direction: column;

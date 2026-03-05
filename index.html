@@ -4,49 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TokenSun</title>
-    <script>
-      (function () {
-        var RESIZE_TOPIC = 'PLUGIN_TOPIC_RESIZE_IFRAME';
-        var VIEW_LOADED_TOPIC = 'PLUGIN_TOPIC_VIEW_LOADED';
-        var target = 100000;
-
-        function post(topic, height) {
-          if (height != null) {
-            var payloads = [
-              { action: topic, data: height },
-              { action: topic, data: { height: height } },
-              { topic: topic, data: { height: height } },
-              { type: topic, data: { height: height } },
-              { topic: topic, height: height },
-              { type: topic, height: height },
-              { topic: topic, payload: { height: height } },
-              { type: topic, payload: { height: height } }
-            ];
-            for (var i = 0; i < payloads.length; i += 1) window.parent && window.parent.postMessage(payloads[i], '*');
-            return;
-          }
-          window.parent && window.parent.postMessage({ action: topic, data: true }, '*');
-          window.parent && window.parent.postMessage({ action: topic, data: {} }, '*');
-          window.parent && window.parent.postMessage({ topic: topic }, '*');
-          window.parent && window.parent.postMessage({ type: topic }, '*');
-        }
-
-        post('VIEW_LOADED');
-        post(VIEW_LOADED_TOPIC);
-        post('PLUGINS_RESIZE_IFRAME', target);
-        post(RESIZE_TOPIC, target);
-
-        var attempts = 0;
-        var timer = window.setInterval(function () {
-          attempts += 1;
-          post('VIEW_LOADED');
-          post(VIEW_LOADED_TOPIC);
-          post('PLUGINS_RESIZE_IFRAME', target);
-          post(RESIZE_TOPIC, target);
-          if (attempts >= 20) window.clearInterval(timer);
-        }, 150);
-      })();
-    </script>
   </head>
   <body>
     <div id="app">Loading...</div>
