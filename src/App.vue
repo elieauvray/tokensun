@@ -1,6 +1,6 @@
 <template>
   <div class="console-layout">
-    <div v-if="isBootLoading" class="loading-container" :style="{ minHeight: `${ignitionHeight}px` }">
+    <div v-if="isBootLoading" class="loading-container" :style="{ minHeight: ignitionHeight }">
       <div class="loading-content">
         <ProgressSpinner style="width: 60px; height: 60px" strokeWidth="4" fill="transparent" animationDuration="1s" />
       </div>
@@ -33,7 +33,7 @@ let pluginSDK: ReturnType<typeof getPluginSDK> | null = null;
 
 const hasConnections = ref(true);
 const isBootLoading = ref(true);
-const ignitionHeight = 5200;
+const ignitionHeight = '100vh';
 const app = getCurrentInstance()?.appContext.app;
 if (app) {
   app.config.globalProperties.toast_duration = 5000;
