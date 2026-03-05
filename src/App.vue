@@ -39,6 +39,14 @@ if (app) {
   app.config.globalProperties.toast_duration = 5000;
 }
 
+// Initialize Plugin SDK
+let pluginSDK: ReturnType<typeof getPluginSDK> | null = null;
+
+onMounted(() => {
+  // Initialize the plugin SDK when the component is mounted
+  pluginSDK = getPluginSDK();
+});
+
 async function refreshConnectionState() {
   try {
     const res = await api<{ connections: any[] }>('/api/connections');
