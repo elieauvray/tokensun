@@ -2,3 +2,4 @@
 
 ## Add some texte here : 
 - todo : buidl API
+- todo : build API2
